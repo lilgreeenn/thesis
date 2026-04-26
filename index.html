@@ -116,8 +116,19 @@ body {
   padding: 2px 6px; border-radius: 8px;
   font-size: 10px; color: var(--text3);
   border: 1px solid var(--border); background: var(--bg);
+  position: relative;
 }
 .chip-dot { width: 4px; height: 4px; border-radius: 50%; }
+.ded-del-btn {
+  position: absolute; top: -6px; right: -6px;
+  width: 14px; height: 14px; border-radius: 50%;
+  border: none; background: var(--text); color: var(--bg);
+  font-size: 10px; line-height: 14px; text-align: center;
+  cursor: pointer; display: none;
+}
+.card.ded-delete-mode .lp-ded { animation: wiggle 0.18s ease-in-out infinite alternate; }
+.card.ded-delete-mode .lp-ded .ded-del-btn { display: block; }
+@keyframes wiggle { from{transform:rotate(-1.8deg)} to{transform:rotate(1.8deg)} }
 .cbtn {
   width: 28px; height: 28px; border-radius: 8px;
   background: var(--bg); border: 1px solid var(--border);
@@ -1000,11 +1011,34 @@ function render(){
 
 function bindLongPressInteractive(){
   document.querySelectorAll('.lp-ded').forEach(el=>{
-    setupLongPress(el, ()=>editDeductTag(el.dataset.tid, el.dataset.ref));
+    setupLongPress(el, ()=>toggleDeductDeleteMode(el.dataset.tid));
   });
   document.querySelectorAll('.lp-cat').forEach(el=>{
     setupLongPress(el, ()=>editSessionTag(el.dataset.tid, el.dataset.cid));
   });
+}
+
+function clearDeductDeleteModes(){
+  document.querySelectorAll('.card.ded-delete-mode').forEach(c=>c.classList.remove('ded-delete-mode'));
+}
+function toggleDeductDeleteMode(tid){
+  const card=document.querySelector(`.card[data-id="${tid}"]`);
+  if(!card) return;
+  const on = card.classList.contains('ded-delete-mode');
+  clearDeductDeleteModes();
+  if(!on) card.classList.add('ded-delete-mode');
+}
+function removeDeductTag(tid, ref){
+  const t=S.timers.find(x=>x.id===tid); if(!t) return;
+  if(ref.startsWith('p:')){
+    const id=ref.slice(2);
+    t.deducts=(t.deducts||[]).filter(x=>x!==id);
+    if(t.deductOverrides) delete t.deductOverrides[id];
+  }else if(ref.startsWith('c:')){
+    const idx=parseInt(ref.slice(2),10);
+    t.customDeducts=(t.customDeducts||[]).filter((_,i)=>i!==idx);
+  }
+  save(); render();
 }
 
 function buildCard(t){
@@ -1023,6 +1057,7 @@ function buildCard(t){
   // deduct chips
   const dHtml=getDeductItems(t).map(d=>
     `<div class="chip-small lp-ded" data-tid="${t.id}" data-ref="${d.ref}" title="${tr('longPressHint')}">
+      <button class="ded-del-btn" onclick="removeDeductTag('${t.id}','${d.ref}')">×</button>
       <div class="chip-dot" style="background:${d.color}"></div>${d.label} ${d.hours}h
     </div>`
   ).join('');
@@ -1495,6 +1530,10 @@ function createTimer(){
   save(); document.getElementById('add-overlay').classList.remove('open'); render();
 }
 function bgClose(e,id){ if(e.target.id===id) document.getElementById(id).classList.remove('open'); }
+document.addEventListener('click', (e)=>{
+  if(e.target.closest('.lp-ded') || e.target.closest('.ded-del-btn')) return;
+  clearDeductDeleteModes();
+});
 
 // ─── INIT ────────────────────────────────────────────────
 if(S.timers.length===0){
