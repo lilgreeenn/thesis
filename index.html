@@ -76,6 +76,11 @@ body {
   font-size: 10px; color: var(--text2); padding: 3px 8px; cursor: pointer; font-family: 'DM Sans', sans-serif;
 }
 .daybar-chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
+.daybar-today {
+  border: 1px solid var(--border2); background: transparent; border-radius: 7px;
+  font-size: 10px; color: var(--text2); padding: 3px 8px; cursor: pointer; font-family: 'DM Sans', sans-serif;
+}
+.daybar-today:active { background: var(--border); }
 
 /* ── SUMMARY BAR ── */
 .summary-bar {
@@ -97,8 +102,13 @@ body {
   padding: 10px 22px 12px;
 }
 .qa-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.qa-top-right { display: flex; align-items: center; gap: 8px; }
 .qa-title { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.09em; }
 .qa-time { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); }
+.qa-toggle {
+  border: 1px solid var(--border2); background: transparent; color: var(--text2);
+  border-radius: 999px; padding: 2px 8px; font-size: 10px; cursor: pointer;
+}
 .qa-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .qa-btn {
   border: 1px solid var(--border); background: var(--bg); color: var(--text2);
@@ -120,6 +130,9 @@ body {
 .qa-log-title { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
 .qa-log-row { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; color: var(--text2); }
 .qa-log-row .time { font-family: 'DM Mono', monospace; color: var(--text); }
+.quick-alarm.collapsed .qa-row,
+.quick-alarm.collapsed .qa-log { display: none; }
+.quick-alarm.collapsed .qa-top { margin-bottom: 0; }
 
 /* ── CARDS ── */
 .events { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
@@ -131,6 +144,8 @@ body {
   animation: fadeUp 0.22s ease both;
 }
 @keyframes fadeUp { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+.card.reorder-mode { animation: wiggle 0.18s ease-in-out infinite alternate; cursor: grab; touch-action: none; }
+.card.reorder-mode.dragging { opacity: 0.8; }
 
 /* Card head */
 .card-head {
@@ -497,6 +512,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
   <button class="daybar-btn" id="day-prev" onclick="shiftViewDay(-1)">◀</button>
   <div class="daybar-center" id="day-label">---</div>
   <div class="daybar-right">
+    <button class="daybar-today" id="day-today-btn" onclick="goToday()">今天</button>
     <button class="daybar-chip" id="focus-chip" onclick="toggleFocusMode()">只看当前</button>
     <button class="daybar-btn" id="day-next" onclick="shiftViewDay(1)">▶</button>
   </div>
@@ -526,7 +542,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 <div class="quick-alarm">
   <div class="qa-top">
     <span class="qa-title" id="qa-title">Quick Alarm</span>
-    <span class="qa-time" id="qa-time">--:--</span>
+    <div class="qa-top-right">
+      <span class="qa-time" id="qa-time">--:--</span>
+      <button class="qa-toggle" id="qa-toggle-btn" onclick="toggleQuickAlarmCollapse()">折叠</button>
+    </div>
   </div>
   <div class="qa-row">
     <button class="qa-btn" onclick="startQuickAlarm(5)">5m</button>
@@ -654,6 +673,7 @@ let LANG = localStorage.getItem(LANG_KEY) || (document.documentElement.lang.star
 const VIEW_DAY_KEY = 'tt_view_day';
 const FOCUS_MODE_KEY = 'tt_focus_mode';
 const QA_LOG_KEY = 'tt_quick_alarm_log';
+const QA_COLLAPSE_KEY = 'tt_quick_alarm_collapsed';
 
 const I18N = {
   en: {
@@ -670,6 +690,7 @@ const I18N = {
     countdown: 'Countdown',
     viewingDay: 'Day',
     today: 'Today',
+    backToday: 'Today',
     focusMode: 'Only current',
     quickAlarm: 'Quick Alarm',
     alarmStart: 'Start',
@@ -679,6 +700,8 @@ const I18N = {
     alarmRecords: 'Alarm records',
     alarmStatusDone: 'done',
     alarmStatusStopped: 'stopped',
+    collapse: 'Collapse',
+    expand: 'Expand',
     name: 'Name',
     namePlaceholder: 'Chapter 3 · Defense · Revisions…',
     duration: 'Duration',
@@ -760,6 +783,7 @@ const I18N = {
     countdown: '倒计时',
     viewingDay: '日期',
     today: '今天',
+    backToday: '今天',
     focusMode: '只看当前',
     quickAlarm: '快速闹钟',
     alarmStart: '开始',
@@ -769,6 +793,8 @@ const I18N = {
     alarmRecords: '闹钟记录',
     alarmStatusDone: '到点',
     alarmStatusStopped: '手动停止',
+    collapse: '折叠',
+    expand: '展开',
     name: '名称',
     namePlaceholder: '第3章 · 答辩 · 修改…',
     duration: '时长',
@@ -914,6 +940,7 @@ function applyTranslations() {
   document.getElementById('submit-btn').textContent = tr('createTimer');
   document.getElementById('day-prev').textContent = '<-';
   document.getElementById('day-next').textContent = '->';
+  document.getElementById('day-today-btn').textContent = tr('backToday');
   document.getElementById('focus-chip').textContent = tr('focusMode');
   document.getElementById('focus-chip').classList.toggle('on', FOCUS_MODE);
   document.getElementById('qa-title').textContent = tr('quickAlarm');
@@ -921,9 +948,22 @@ function applyTranslations() {
   document.getElementById('qa-stop-btn').textContent = tr('alarmStop');
   document.getElementById('qa-custom').placeholder = tr('alarmCustomPlaceholder');
   document.getElementById('qa-log-title').textContent = tr('alarmRecords');
+  const qa = document.querySelector('.quick-alarm');
+  if(qa) qa.classList.toggle('collapsed', QA_COLLAPSED);
+  const qtb = document.getElementById('qa-toggle-btn');
+  if(qtb) qtb.textContent = QA_COLLAPSED ? tr('expand') : tr('collapse');
   renderCustomDedDraft();
   updateDayLabel();
   updateQuickAlarmUI();
+}
+
+function toggleQuickAlarmCollapse(){
+  QA_COLLAPSED = !QA_COLLAPSED;
+  localStorage.setItem(QA_COLLAPSE_KEY, QA_COLLAPSED ? '1' : '0');
+  const qa = document.querySelector('.quick-alarm');
+  if(qa) qa.classList.toggle('collapsed', QA_COLLAPSED);
+  const qtb = document.getElementById('qa-toggle-btn');
+  if(qtb) qtb.textContent = QA_COLLAPSED ? tr('expand') : tr('collapse');
 }
 
 function toggleAddMenu(){
@@ -947,6 +987,12 @@ function updateDayLabel(){
 }
 function shiftViewDay(delta){
   VIEW_DAY = shiftDayKey(VIEW_DAY, delta);
+  localStorage.setItem(VIEW_DAY_KEY, VIEW_DAY);
+  updateDayLabel();
+  render();
+}
+function goToday(){
+  VIEW_DAY = dayKey();
   localStorage.setItem(VIEW_DAY_KEY, VIEW_DAY);
   updateDayLabel();
   render();
@@ -1015,6 +1061,9 @@ const newGoalItem = text => ({id:`g_${Date.now()}_${Math.floor(Math.random()*999
 let VIEW_DAY = localStorage.getItem(VIEW_DAY_KEY) || dayKey();
 let FOCUS_MODE = localStorage.getItem(FOCUS_MODE_KEY) === '1';
 let QA = {endAt:null, ringing:false, loop:null, current:null, history:[]};
+let QA_COLLAPSED = localStorage.getItem(QA_COLLAPSE_KEY) === '1';
+let QA_AUDIO_CTX = null;
+let QA_TIMER_LOOP = null;
 let ADD_MENU_OPEN = false;
 try{
   const qh = JSON.parse(localStorage.getItem(QA_LOG_KEY)||'[]');
@@ -1078,20 +1127,51 @@ function qaFmt(sec){
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 function playAlarmBeep(){
+  try{
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    if(!QA_AUDIO_CTX) QA_AUDIO_CTX = new Ctx();
+    const ctx = QA_AUDIO_CTX;
+    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type='sine';
+    osc.frequency.value=920;
+    gain.gain.value=0.001;
+    osc.connect(gain); gain.connect(ctx.destination);
+    const n = ctx.currentTime;
+    gain.gain.exponentialRampToValueAtTime(0.16, n+0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, n+0.26);
+    osc.start(n); osc.stop(n+0.28);
+  }catch(e){}
+}
+function ensureAudioUnlocked(){
   const Ctx = window.AudioContext || window.webkitAudioContext;
   if(!Ctx) return;
-  const ctx = new Ctx();
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type='sine';
-  osc.frequency.value=920;
-  gain.gain.value=0.001;
-  osc.connect(gain); gain.connect(ctx.destination);
-  const n = ctx.currentTime;
-  gain.gain.exponentialRampToValueAtTime(0.18, n+0.02);
-  gain.gain.exponentialRampToValueAtTime(0.001, n+0.26);
-  osc.start(n); osc.stop(n+0.28);
-  setTimeout(()=>ctx.close(), 360);
+  if(!QA_AUDIO_CTX) QA_AUDIO_CTX = new Ctx();
+  if(QA_AUDIO_CTX.state === 'suspended'){
+    QA_AUDIO_CTX.resume().catch(()=>{});
+  }
+}
+function quickAlarmFeedback(type){
+  try{
+    if(type==='start'){
+      playAlarmBeep();
+      navigator.vibrate && navigator.vibrate(30);
+      return;
+    }
+    if(type==='stop'){
+      playAlarmBeep();
+      setTimeout(playAlarmBeep, 130);
+      navigator.vibrate && navigator.vibrate([45,30,45]);
+      return;
+    }
+    // done
+    playAlarmBeep();
+    setTimeout(playAlarmBeep, 140);
+    setTimeout(playAlarmBeep, 280);
+    navigator.vibrate && navigator.vibrate([250,120,250]);
+  }catch(e){}
 }
 function updateQuickAlarmUI(){
   const timeEl=document.getElementById('qa-time');
@@ -1123,14 +1203,12 @@ function startRinging(){
     saveQuickAlarmHistory();
   }
   QA.ringing=true;
-  QA.loop=setInterval(()=>{
-    playAlarmBeep();
-    navigator.vibrate && navigator.vibrate([240,120,240]);
-  },1050);
+  quickAlarmFeedback('done');
+  QA.loop=setInterval(()=>quickAlarmFeedback('done'),1050);
   showRewardToast(tr('alarmDone'));
   updateQuickAlarmUI();
 }
-function stopQuickAlarm(){
+function stopQuickAlarm(silent=false){
   if(QA.current){
     QA.current.endAt = Date.now();
     QA.current.status = 'stopped';
@@ -1142,20 +1220,32 @@ function stopQuickAlarm(){
   QA.ringing=false;
   if(QA.loop){ clearInterval(QA.loop); QA.loop=null; }
   navigator.vibrate && navigator.vibrate(0);
+  if(!silent) quickAlarmFeedback('stop');
   updateQuickAlarmUI();
 }
 function startQuickAlarm(mins){
   const m=Number(mins)||0;
   if(m<=0) return;
-  stopQuickAlarm();
+  ensureAudioUnlocked();
+  stopQuickAlarm(true);
   QA.current = {startAt:Date.now(), mins:m, status:'running'};
   QA.endAt=Date.now()+m*60*1000;
+  quickAlarmFeedback('start');
   updateQuickAlarmUI();
 }
 function startQuickAlarmCustom(){
+  ensureAudioUnlocked();
   const v=parseInt(document.getElementById('qa-custom').value,10);
   if(!v || v<=0) return;
   startQuickAlarm(v);
+}
+function quickAlarmLoopTick(){
+  try{
+    if(QA.endAt && !QA.ringing && (QA.endAt-Date.now())<=0){
+      startRinging();
+    }
+    updateQuickAlarmUI();
+  }catch(e){}
 }
 const getDeductItems = t => {
   const preset = (t.deducts || []).map(id => {
@@ -1178,8 +1268,11 @@ function setupLongPress(el, callback, ms=480){
   if(!el || el.dataset.lpBound==='1') return;
   el.dataset.lpBound='1';
   let timer=null, fired=false;
-  const start=()=>{
+  let startY=null;
+  const getY = evt => evt.touches ? evt.touches[0].clientY : evt.clientY;
+  const start=(evt)=>{
     fired=false;
+    startY=getY(evt);
     timer=setTimeout(()=>{
       fired=true;
       callback();
@@ -1193,7 +1286,16 @@ function setupLongPress(el, callback, ms=480){
       e.stopPropagation();
       el.dataset.skipClick='1';
       setTimeout(()=>{ el.dataset.skipClick='0'; }, 0);
+      // Mobile friendly: long-press + same-gesture slide to move card.
+      if(el.classList.contains('card') && startY!==null){
+        const endY = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientY : (e.clientY ?? startY);
+        const dy = endY - startY;
+        if(Math.abs(dy) > 28 && typeof moveCard === 'function'){
+          moveCard(el.dataset.id, dy < 0 ? -1 : 1);
+        }
+      }
     }
+    startY=null;
   };
   el.addEventListener('mousedown', start);
   el.addEventListener('touchstart', start, {passive:true});
@@ -1271,12 +1373,65 @@ function render(){
 }
 
 function bindLongPressInteractive(){
+  document.querySelectorAll('.card').forEach(el=>{
+    setupLongPress(el, ()=>toggleCardReorderMode(el.dataset.id));
+    setupCardDragGesture(el);
+  });
   document.querySelectorAll('.lp-ded').forEach(el=>{
     setupLongPress(el, ()=>toggleDeductDeleteMode(el.dataset.tid));
   });
   document.querySelectorAll('.lp-cat').forEach(el=>{
     setupLongPress(el, ()=>editSessionTag(el.dataset.tid, el.dataset.cid));
   });
+}
+function setupCardDragGesture(el){
+  if(!el || el.dataset.dragBound==='1') return;
+  el.dataset.dragBound='1';
+  let startY=null;
+  const getY = evt => evt.touches ? evt.touches[0].clientY : evt.clientY;
+  const onStart = evt => {
+    if(!el.classList.contains('reorder-mode')) return;
+    startY=getY(evt);
+    el.classList.add('dragging');
+  };
+  const onEnd = evt => {
+    if(startY===null) return;
+    const endY = (evt.changedTouches && evt.changedTouches[0]) ? evt.changedTouches[0].clientY : (evt.clientY ?? startY);
+    const dy=endY-startY;
+    startY=null;
+    el.classList.remove('dragging');
+    if(Math.abs(dy)<28) return;
+    moveCard(el.dataset.id, dy<0?-1:1);
+  };
+  el.addEventListener('mousedown', onStart);
+  el.addEventListener('touchstart', onStart, {passive:true});
+  el.addEventListener('mouseup', onEnd);
+  el.addEventListener('mouseleave', onEnd);
+  el.addEventListener('touchend', onEnd);
+  el.addEventListener('touchcancel', onEnd);
+}
+
+function clearCardReorderModes(){
+  document.querySelectorAll('.card.reorder-mode').forEach(c=>c.classList.remove('reorder-mode'));
+}
+function toggleCardReorderMode(id){
+  const card=document.querySelector(`.card[data-id="${id}"]`);
+  if(!card) return;
+  const on=card.classList.contains('reorder-mode');
+  clearCardReorderModes();
+  if(!on) card.classList.add('reorder-mode');
+}
+function moveCard(id, dir){
+  const i=S.timers.findIndex(t=>t.id===id);
+  if(i<0) return;
+  const j=i+dir;
+  if(j<0||j>=S.timers.length) return;
+  const tmp=S.timers[i];
+  S.timers[i]=S.timers[j];
+  S.timers[j]=tmp;
+  save(); render();
+  const card=document.querySelector(`.card[data-id="${id}"]`);
+  if(card) card.classList.add('reorder-mode');
 }
 
 function clearDeductDeleteModes(){
@@ -1913,6 +2068,7 @@ function bgClose(e,id){ if(e.target.id===id) document.getElementById(id).classLi
 document.addEventListener('click', (e)=>{
   if(e.target.closest('.lp-ded') || e.target.closest('.ded-del-btn')) return;
   clearDeductDeleteModes();
+  clearCardReorderModes();
   if(!e.target.closest('.add-btn') && !e.target.closest('.add-menu')){
     ADD_MENU_OPEN=false;
     const m=document.getElementById('add-menu');
@@ -1941,10 +2097,18 @@ if(S.timers.length===0){
   });
   save();
 }
-applyTranslations();
-render();
-clockTick();
-setInterval(()=>{clockTick();tick();},1000);
+try{ applyTranslations(); }catch(e){ console.error('applyTranslations failed', e); }
+try{ render(); }catch(e){ console.error('render failed', e); }
+try{ clockTick(); }catch(e){ console.error('clockTick failed', e); }
+document.addEventListener('touchstart', ensureAudioUnlocked, {passive:true});
+document.addEventListener('click', ensureAudioUnlocked, true);
+setInterval(()=>{
+  try{ clockTick(); }catch(e){}
+  try{ tick(); }catch(e){}
+},1000);
+if(!QA_TIMER_LOOP){
+  QA_TIMER_LOOP = setInterval(quickAlarmLoopTick, 250);
+}
 </script>
 
 <script>
