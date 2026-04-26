@@ -502,9 +502,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
         <div class="dur-chip sel" onclick="pickDur(8,this)">8h</div>
         <div class="dur-chip" onclick="pickDur(24,this)">24h</div>
         <div class="dur-chip" onclick="pickDur(48,this)">48h</div>
-        <div class="dur-chip" onclick="pickDur(72,this)">72h</div>
+        <!-- <div class="dur-chip" onclick="pickDur(72,this)">72h</div> -->
         <div class="dur-chip" onclick="pickDur('eod',this)">23:59<span class="sub" id="dur-eod-sub">end of day</span></div>
-        <div class="dur-chip" onclick="pickDur('custom',this)">📅<span class="sub" id="dur-custom-sub">custom</span></div>
+        <div class="dur-chip" onclick="pickDur('custom',this)">自定义<span class="sub" id="dur-custom-sub">custom</span></div>
       </div>
     </div>
 
@@ -717,15 +717,15 @@ const tr = key => (I18N[LANG] && I18N[LANG][key]) || I18N.en[key] || key;
 
 const DEDUCTS = [
   {id:'s6', label:'Sleep 6h', hours:6, cat:'sleep'},
-  {id:'s7', label:'Sleep 7h', hours:7, cat:'sleep'},
-  {id:'s8', label:'Sleep 8h', hours:8, cat:'sleep'},
+  // {id:'s7', label:'Sleep 7h', hours:7, cat:'sleep'},
+  // {id:'s8', label:'Sleep 8h', hours:8, cat:'sleep'},
   {id:'m',  label:'Meals 1.5h', hours:1.5, cat:'rest'},
   {id:'c',  label:'Commute 1h', hours:1, cat:'work'},
 ];
 const dedLabel = {
   s6: {en:'Sleep 6h', zh:'睡眠 6h'},
-  s7: {en:'Sleep 7h', zh:'睡眠 7h'},
-  s8: {en:'Sleep 8h', zh:'睡眠 8h'},
+  // s7: {en:'Sleep 7h', zh:'睡眠 7h'},
+  // s8: {en:'Sleep 8h', zh:'睡眠 8h'},
   m:  {en:'Meals 1.5h', zh:'吃饭 1.5h'},
   c:  {en:'Commute 1h', zh:'通勤 1h'}
 };
@@ -781,8 +781,8 @@ function applyTranslations() {
   document.getElementById('nudge-main').textContent = tr('restNudge');
   document.getElementById('nudge-sub').textContent = tr('vibrateNudge');
   document.getElementById('submit-btn').textContent = tr('createTimer');
-  document.getElementById('day-prev').textContent = '◀';
-  document.getElementById('day-next').textContent = '▶';
+  document.getElementById('day-prev').textContent = '<-';
+  document.getElementById('day-next').textContent = '->';
   document.getElementById('focus-chip').textContent = tr('focusMode');
   document.getElementById('focus-chip').classList.toggle('on', FOCUS_MODE);
   renderCustomDedDraft();
