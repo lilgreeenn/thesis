@@ -265,9 +265,21 @@ body {
 .goal-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); }
 .goal-item input { accent-color: var(--text); }
 .goal-text { flex: 1; cursor: pointer; }
+.goal-time { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text3); }
 .goal-add {
   border: 1px solid var(--border2); background: transparent; color: var(--text3);
   border-radius: 6px; font-size: 10px; padding: 2px 7px; cursor: pointer;
+}
+.sess-timeline {
+  position: relative; height: 16px; margin-top: 6px; margin-bottom: 2px;
+}
+.sess-timeline-track {
+  position: absolute; left: 0; right: 0; top: 7px; height: 2px;
+  background: var(--border); border-radius: 2px;
+}
+.sess-timeline-dot {
+  position: absolute; top: 3px; width: 9px; height: 9px; border-radius: 50%;
+  border: 1px solid var(--surface); transform: translateX(-50%);
 }
 .reward-toast {
   position: fixed; left: 50%; transform: translateX(-50%) translateY(16px);
@@ -599,6 +611,10 @@ const I18N = {
     deleteTagConfirm: 'Delete this tag?',
     deleteDeductConfirm: 'Delete this deduction tag?',
     sessionHistory: 'Action History',
+    timelineDetailTitle: 'Timeline detail',
+    timelineStart: 'Start',
+    timelineEnd: 'End',
+    timelineDuration: 'Duration',
     sessionTotal: 'Total',
     runningNow: 'Running',
     workGoalOptional: 'Work goal (optional)',
@@ -671,6 +687,10 @@ const I18N = {
     deleteTagConfirm: '删除这个标签吗？',
     deleteDeductConfirm: '删除这个扣除标签吗？',
     sessionHistory: '动作历史',
+    timelineDetailTitle: '时间轴详情',
+    timelineStart: '开始',
+    timelineEnd: '结束',
+    timelineDuration: '时长',
     sessionTotal: '总和',
     runningNow: '进行中',
     workGoalOptional: '学习目标（可选）',
@@ -869,7 +889,7 @@ const viewNowMs = () => {
   return dayEndMs(VIEW_DAY)-1000; // past day: snapshot at end of day
 };
 const fmtDayLabel = key => new Date(`${key}T00:00:00`).toLocaleDateString(LANG==='zh'?'zh-CN':'en-US',{month:'short',day:'numeric',weekday:'short'});
-const newGoalItem = text => ({id:`g_${Date.now()}_${Math.floor(Math.random()*999)}`, text, done:false});
+const newGoalItem = text => ({id:`g_${Date.now()}_${Math.floor(Math.random()*999)}`, text, done:false, doneAt:null});
 let VIEW_DAY = localStorage.getItem(VIEW_DAY_KEY) || dayKey();
 let FOCUS_MODE = localStorage.getItem(FOCUS_MODE_KEY) === '1';
 function normalizeTimer(t){
@@ -885,7 +905,7 @@ function normalizeTimer(t){
   if(!t.dailyLine.items) t.dailyLine.items=[];
   if(t.dailyLine.date!==dayKey()){
     t.dailyLine.date=dayKey();
-    t.dailyLine.items=t.dailyLine.items.map(i=>({...i,done:false}));
+    t.dailyLine.items=t.dailyLine.items.map(i=>({...i,done:false,doneAt:null}));
   }
 }
 
@@ -895,6 +915,14 @@ function showRewardToast(msg){
   el.textContent=msg;
   el.classList.add('show');
   setTimeout(()=>el.classList.remove('show'),1600);
+}
+function fmtClock(ts){
+  return new Date(ts).toLocaleTimeString(LANG==='zh'?'zh-CN':'en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+function showTimelineDetail(label, startTs, endTs, durationSec){
+  const safeLabel = decodeURIComponent(label || '');
+  const endText = endTs ? fmtClock(Number(endTs)) : `(${tr('runningNow')})`;
+  alert(`${tr('timelineDetailTitle')}\n${safeLabel}\n${tr('timelineStart')}: ${fmtClock(Number(startTs))}\n${tr('timelineEnd')}: ${endText}\n${tr('timelineDuration')}: ${hm(Number(durationSec)||0)}`);
 }
 const getDeductItems = t => {
   const preset = (t.deducts || []).map(id => {
@@ -1075,10 +1103,39 @@ function buildCard(t){
 
   const historyRows = [
     ...(act ? [{catId:act.catId, sec:(now-act.start)/1000, active:true}] : []),
-    ...[...t.sessions].slice(-8).reverse().map(s=>({catId:s.catId, sec:(s.end-s.start)/1000, active:false})),
-    ...(t.distractionActiveStart ? [{isDistract:true, active:true, start:t.distractionActiveStart}] : []),
-    ...(t.distractions||[]).slice(-5).reverse().map(d=>({isDistract:true, start:d.start, durationSec:d.durationSec||0, reason:d.reason||''}))
+    ...[...t.sessions].slice(-8).reverse().map(s=>({catId:s.catId, sec:(s.end-s.start)/1000, active:false, start:s.start, end:s.end})),
+    ...(t.distractionActiveStart ? [{isDistract:true, active:true, start:t.distractionActiveStart, reason:t.distractionActiveReason||''}] : []),
+    ...(t.distractions||[]).slice(-5).reverse().map(d=>({isDistract:true, start:d.start, end:d.end, durationSec:d.durationSec||0, reason:d.reason||''}))
   ];
+  const timelineEvents = historyRows
+    .map(r => {
+      const start = r.start || now;
+      const durationSec = r.isDistract
+        ? (r.active ? Math.max(1,(now-start)/1000) : (r.durationSec||0))
+        : (r.sec || 0);
+      const end = r.active ? null : (r.end || (start + durationSec*1000));
+      const label = r.isDistract
+        ? `⚡ ${tr('distractedLogged')}${r.reason?` · ${r.reason}`:''}`
+        : catLabelById(t, r.catId);
+      return {
+        start,
+        end,
+        durationSec,
+        label,
+        color: r.isDistract ? 'var(--c-rest)' : catColor(r.catId)
+      };
+    })
+    .filter(r => !!r.start);
+  const ds = dayStartMs(VIEW_DAY);
+  const de = dayEndMs(VIEW_DAY);
+  const timelineHtml = timelineEvents.length ? `
+    <div class="sess-timeline">
+      <div class="sess-timeline-track"></div>
+      ${timelineEvents.map(e=>{
+        const pct = Math.max(0, Math.min(100, ((e.start - ds) / (de - ds)) * 100));
+        return `<span class="sess-timeline-dot" style="left:${pct}%;background:${e.color}" onclick="showTimelineDetail('${encodeURIComponent(e.label)}','${e.start}','${e.end||''}','${Math.round(e.durationSec)}')"></span>`;
+      }).join('')}
+    </div>` : '';
   const historyHtml = historyRows.length
     ? `<div class="sess-log">
         <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">${tr('sessionHistory')}</div>
@@ -1183,11 +1240,13 @@ function buildCard(t){
           <div class="goal-item">
             <input type="checkbox" ${g.done?'checked':''} onchange="toggleDailyGoal('${t.id}','${g.id}')">
             <span class="goal-text" onclick="editDailyGoal('${t.id}','${g.id}')">${g.text}</span>
+            ${g.doneAt?`<span class="goal-time">${new Date(g.doneAt).toLocaleTimeString(LANG==='zh'?'zh-CN':'en-US',{hour:'2-digit',minute:'2-digit'})}</span>`:''}
           </div>
         `).join('')}
         <button class="goal-add" onclick="addDailyGoal('${t.id}')">＋ ${tr('addGoalItem')}</button>
       </div>
 
+      ${timelineHtml}
       ${historyHtml}
       ${barHtml}
     </div>`;
@@ -1250,6 +1309,7 @@ function tick(){
 function startSess(tid,catId){
   const t=S.timers.find(x=>x.id===tid); if(!t) return;
   normalizeTimer(t);
+  finishDistractionIfActive(t);
   if(t.activeSession){
     const same=t.activeSession.catId===catId;
     t.sessions.push({...t.activeSession,end:Date.now()});
@@ -1274,30 +1334,36 @@ function stopSess(tid){
 }
 function saveNote(tid,val){ const t=S.timers.find(x=>x.id===tid); if(t&&t.activeSession) t.activeSession.note=val; }
 
+function finishDistractionIfActive(t){
+  if(!t.distractionActiveStart) return false;
+  const now=Date.now();
+  const durationSec=Math.max(1,Math.round((now-t.distractionActiveStart)/1000));
+  t.distractions.unshift({
+    start:t.distractionActiveStart,
+    end:now,
+    durationSec,
+    reason:t.distractionActiveReason||''
+  });
+  t.distractionActiveStart=null;
+  t.distractionActiveReason='';
+  if(t.distractions.length>50) t.distractions=t.distractions.slice(0,50);
+  return true;
+}
+
 function markDistracted(tid){
   const t=S.timers.find(x=>x.id===tid); if(!t) return;
   normalizeTimer(t);
-  const now=Date.now();
   if(t.distractionActiveStart){
-    const durationSec=Math.max(1,Math.round((now-t.distractionActiveStart)/1000));
-    t.distractions.unshift({
-      start:t.distractionActiveStart,
-      end:now,
-      durationSec,
-      reason:t.distractionActiveReason||''
-    });
-    t.distractionActiveStart=null;
-    t.distractionActiveReason='';
+    finishDistractionIfActive(t);
     navigator.vibrate && navigator.vibrate([40,30,40]);
     showRewardToast(tr('returnTask'));
   }else{
     const reason = prompt(tr('distractedReasonPrompt'), '') || '';
-    t.distractionActiveStart=now;
+    t.distractionActiveStart=Date.now();
     t.distractionActiveReason=reason.trim() || tr('distractedNoReason');
     navigator.vibrate && navigator.vibrate(30);
     showRewardToast(tr('distracted'));
   }
-  if(t.distractions.length>50) t.distractions=t.distractions.slice(0,50);
   save(); render();
 }
 
@@ -1306,6 +1372,7 @@ function toggleDailyGoal(tid,gid){
   normalizeTimer(t);
   const item=t.dailyLine.items.find(i=>i.id===gid); if(!item) return;
   item.done=!item.done;
+  item.doneAt=item.done?Date.now():null;
   if(item.done){
     navigator.vibrate && navigator.vibrate(45);
     showRewardToast('✅');
