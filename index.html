@@ -32,7 +32,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: 'DM Sans', sans-serif;
-  font-weight: 300;
+  font-weight: 400;
   min-height: 100vh;
   padding-bottom: max(90px, env(safe-area-inset-bottom));
 }
@@ -49,6 +49,14 @@ body {
   position: sticky; top: 0; z-index: 10;
 }
 .header h1 { font-size: 11px; font-weight: 400; color: var(--text3); letter-spacing: 0.12em; text-transform: uppercase; }
+.header-left { display: flex; align-items: center; gap: 8px; }
+.lang-btn {
+  height: 24px; padding: 0 8px; border-radius: 7px;
+  border: 1px solid var(--border2); background: var(--surface);
+  color: var(--text2); font-size: 10px; font-family: 'DM Mono', monospace;
+  cursor: pointer;
+}
+.lang-btn:active { background: var(--border); }
 .header-right { text-align: right; }
 .header-clock { font-family: 'DM Mono', monospace; font-size: 15px; color: var(--text); }
 .header-date  { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text3); margin-top: 1px; }
@@ -139,7 +147,7 @@ body {
   display: flex; align-items: center; gap: 5px;
   padding: 6px 11px; border-radius: 20px;
   border: 1px solid var(--border); background: transparent;
-  font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 300;
+  font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 400;
   color: var(--text2); cursor: pointer; transition: all 0.15s;
 }
 .cat-btn.running {
@@ -149,7 +157,7 @@ body {
 .cat-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--cc); flex-shrink: 0; }
 .cat-name-input {
   background: transparent; border: none; outline: none;
-  font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 300;
+  font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 400;
   color: inherit; width: 56px; cursor: text;
 }
 
@@ -185,7 +193,7 @@ body {
 .note-inp {
   flex: 1; background: transparent; border: none;
   border-bottom: 1px solid var(--border);
-  font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 300;
+  font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 400;
   color: var(--text2); outline: none; padding: 3px 0;
 }
 .note-inp::placeholder { color: var(--text3); font-style: italic; }
@@ -266,12 +274,12 @@ body {
 .inp {
   width: 100%; background: var(--bg); border: 1px solid var(--border);
   border-radius: 10px; padding: 11px 14px;
-  font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 300;
+  font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 400;
   color: var(--text); outline: none; transition: border-color 0.15s;
 }
 .inp:focus { border-color: var(--text2); }
 input[type=datetime-local] { color-scheme: light; }
-input[type=number] { -moz-appearance: textfield; }
+input[type=number] { appearance: none; -moz-appearance: textfield; }
 input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
 /* Duration chips */
@@ -297,6 +305,29 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 }
 .dchip.on { border-color: var(--dc); color: var(--dc); background: color-mix(in srgb,var(--dc) 8%,transparent); }
 .dchip-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--dc); }
+.custom-ded-row { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+.custom-ded-row .inp { padding: 9px 12px; font-size: 13px; }
+.custom-ded-name { flex: 1; }
+.custom-ded-hours { width: 90px; }
+.custom-ded-add {
+  padding: 9px 12px; border-radius: 9px; border: 1px solid var(--border2);
+  background: var(--surface); color: var(--text2); font-size: 12px;
+  font-family: 'DM Sans', sans-serif; cursor: pointer;
+}
+.custom-ded-add:active { background: var(--border); }
+.custom-ded-list {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px;
+}
+.custom-ded-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); border-radius: 12px;
+  padding: 4px 8px; font-size: 11px; color: var(--text2);
+  background: var(--bg);
+}
+.custom-ded-remove {
+  border: none; background: transparent; color: var(--text3);
+  cursor: pointer; font-size: 12px; line-height: 1;
+}
 
 /* Goal row */
 .goal-inp-row { display: flex; align-items: center; gap: 10px; }
@@ -327,7 +358,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 <div class="app">
 
 <div class="header">
-  <h1>Thesis Timer</h1>
+  <div class="header-left">
+    <h1 id="title-app">Thesis Timer</h1>
+    <button class="lang-btn" id="lang-btn" onclick="toggleLang()">中 / EN</button>
+  </div>
   <div class="header-right">
     <div class="header-clock" id="h-clock">--:--:--</div>
     <div class="header-date" id="h-date">---</div>
@@ -337,35 +371,35 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 <div class="summary-bar">
   <div class="sum-item">
     <div class="sum-dot" style="background:var(--c-work)"></div>
-    <span class="sum-lbl">Work</span>
+    <span class="sum-lbl" id="lbl-work">Work</span>
     <span class="sum-val" id="s-work">0m</span>
   </div>
   <div class="sum-item">
     <div class="sum-dot" style="background:var(--c-rest)"></div>
-    <span class="sum-lbl">Rest</span>
+    <span class="sum-lbl" id="lbl-rest">Rest</span>
     <span class="sum-val" id="s-rest">0m</span>
   </div>
   <div class="sum-item">
     <div class="sum-dot" style="background:var(--c-sleep)"></div>
-    <span class="sum-lbl">Sleep</span>
+    <span class="sum-lbl" id="lbl-sleep">Sleep</span>
     <span class="sum-val" id="s-sleep">0m</span>
   </div>
   <div class="sum-spacer"></div>
-  <span class="sum-goal-lbl">goal</span>
+  <span class="sum-goal-lbl" id="lbl-goal">goal</span>
   <span class="sum-goal" id="s-goal" style="color:var(--text2)">—</span>
 </div>
 
 <div class="events" id="events-wrap">
   <div class="empty" id="empty-state">
     <div class="empty-icon">◎</div>
-    No timers yet.<br>Add one below.
+    <span id="empty-text">No timers yet.<br>Add one below.</span>
   </div>
 </div>
 </div>
 
 <div class="bottom-fab">
   <div class="app">
-    <button class="add-btn" onclick="openSheet()">＋ &nbsp; New Timer</button>
+    <button class="add-btn" id="add-btn" onclick="openSheet()">＋ &nbsp; New Timer</button>
   </div>
 </div>
 
@@ -373,15 +407,15 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 <div class="overlay" id="add-overlay" onclick="bgClose(event,'add-overlay')">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <div class="sheet-title">New Timer</div>
+    <div class="sheet-title" id="sheet-title">New Timer</div>
 
     <div class="field">
-      <label>Name</label>
+      <label id="f-name-label">Name</label>
       <input class="inp" id="f-name" placeholder="Chapter 3 · Defense · Revisions…" maxlength="30">
     </div>
 
     <div class="field">
-      <label>Duration</label>
+      <label id="f-duration-label">Duration</label>
       <div class="dur-chips">
         <div class="dur-chip" onclick="pickDur(3,this)">3h</div>
         <div class="dur-chip" onclick="pickDur(5,this)">5h</div>
@@ -389,41 +423,47 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
         <div class="dur-chip" onclick="pickDur(24,this)">24h</div>
         <div class="dur-chip" onclick="pickDur(48,this)">48h</div>
         <div class="dur-chip" onclick="pickDur(72,this)">72h</div>
-        <div class="dur-chip" onclick="pickDur('eod',this)">23:59<span class="sub">end of day</span></div>
-        <div class="dur-chip" onclick="pickDur('custom',this)">📅<span class="sub">custom</span></div>
+        <div class="dur-chip" onclick="pickDur('eod',this)">23:59<span class="sub" id="dur-eod-sub">end of day</span></div>
+        <div class="dur-chip" onclick="pickDur('custom',this)">📅<span class="sub" id="dur-custom-sub">custom</span></div>
       </div>
     </div>
 
     <div class="field" id="custom-field" style="display:none">
-      <label>End date & time</label>
+      <label id="f-end-label">End date & time</label>
       <input class="inp" type="datetime-local" id="f-custom">
     </div>
 
     <div class="field">
-      <label>Deduct from net time</label>
+      <label id="f-deduct-label">Deduct from net time</label>
       <div class="ded-chips" id="ded-row"></div>
+      <div class="custom-ded-row">
+        <input class="inp custom-ded-name" id="f-ded-name" placeholder="Custom item">
+        <input class="inp custom-ded-hours" type="number" id="f-ded-hours" placeholder="1.5h" min="0.1" step="0.1">
+        <button class="custom-ded-add" id="f-ded-add" onclick="addCustomDed()">Add</button>
+      </div>
+      <div class="custom-ded-list" id="custom-ded-list"></div>
     </div>
 
     <div class="field">
-      <label>Work goal (optional)</label>
+      <label id="f-goal-label">Work goal (optional)</label>
       <div class="goal-inp-row">
         <input class="inp" type="number" id="f-goal" placeholder="e.g. 4" min="0.5" max="24" step="0.5">
-        <span class="goal-unit">h focused work</span>
+        <span class="goal-unit" id="goal-unit">h focused work</span>
       </div>
     </div>
 
     <div class="field">
-      <label>Nudge</label>
+      <label id="f-nudge-label">Nudge</label>
       <div class="toggle-row">
         <div class="toggle-txt">
-          <div class="main">Rest nudge</div>
-          <div class="sub">Vibrate after 30 min resting</div>
+          <div class="main" id="nudge-main">Rest nudge</div>
+          <div class="sub" id="nudge-sub">Vibrate after 30 min resting</div>
         </div>
         <div class="toggle" id="nudge-tog" onclick="this.classList.toggle('on')"></div>
       </div>
     </div>
 
-    <button class="submit-btn" onclick="createTimer()">Create Timer</button>
+    <button class="submit-btn" id="submit-btn" onclick="createTimer()">Create Timer</button>
   </div>
 </div>
 
@@ -435,6 +475,103 @@ const BASE_CATS = [
   {id:'sleep', label:'Sleep', color:'#5c7a8b'},
 ];
 const CUSTOM_COLOR = '#9a8570';
+const LANG_KEY = 'tt_lang';
+let LANG = localStorage.getItem(LANG_KEY) || (document.documentElement.lang.startsWith('zh') ? 'zh' : 'en');
+
+const I18N = {
+  en: {
+    title: 'Thesis Timer',
+    work: 'Work',
+    rest: 'Rest',
+    sleep: 'Sleep',
+    goal: 'goal',
+    noTimers: 'No timers yet.<br>Add one below.',
+    newTimer: 'New Timer',
+    name: 'Name',
+    namePlaceholder: 'Chapter 3 · Defense · Revisions…',
+    duration: 'Duration',
+    endOfDay: 'end of day',
+    custom: 'custom',
+    endDateTime: 'End date & time',
+    deduct: 'Deduct from net time',
+    customDeductName: 'Custom item',
+    customDeductHours: 'Hours',
+    addDeduct: 'Add',
+    customDeductHoursPlaceholder: '1.5h',
+    customDeductHoursAlert: 'Please enter valid deduction hours.',
+    workGoalOptional: 'Work goal (optional)',
+    goalPlaceholder: 'e.g. 4',
+    focusedWork: 'h focused work',
+    nudge: 'Nudge',
+    restNudge: 'Rest nudge',
+    vibrateNudge: 'Vibrate after 30 min resting',
+    createTimer: 'Create Timer',
+    timerDefaultName: 'Timer',
+    other: 'Other',
+    deleteTimer: 'Delete timer?',
+    delete: 'Delete',
+    cancel: 'Cancel',
+    endsArrow: '→',
+    netRemaining: 'net remaining',
+    totalDeduct: 'total · −',
+    workGoalLine: (worked, goal) => `Work · ${worked} of ${goal}h goal`,
+    sessionTracker: 'Session Tracker',
+    tracked: 'tracked',
+    tapCategory: 'Tap a category to start tracking →',
+    restOver30m: 'rest > 30m !',
+    stop: 'Stop',
+    quickNote: 'quick note…',
+    pickDateAlert: 'Please pick a date.',
+    demoName: 'Thesis Final Draft'
+  },
+  zh: {
+    title: '论文计时器',
+    work: '学习',
+    rest: '休息',
+    sleep: '睡眠',
+    goal: '目标',
+    noTimers: '还没有计时器。<br>点下方按钮新建。',
+    newTimer: '新建计时器',
+    name: '名称',
+    namePlaceholder: '第3章 · 答辩 · 修改…',
+    duration: '时长',
+    endOfDay: '当天结束',
+    custom: '自定义',
+    endDateTime: '结束日期和时间',
+    deduct: '从净时间中扣除',
+    customDeductName: '自定义项目',
+    customDeductHours: '小时',
+    addDeduct: '添加',
+    customDeductHoursPlaceholder: '1.5小时',
+    customDeductHoursAlert: '请输入有效的扣除小时数。',
+    workGoalOptional: '学习目标（可选）',
+    goalPlaceholder: '例如 4',
+    focusedWork: '小时专注学习',
+    nudge: '提醒',
+    restNudge: '休息提醒',
+    vibrateNudge: '连续休息 30 分钟后震动提醒',
+    createTimer: '创建计时器',
+    timerDefaultName: '计时器',
+    other: '其他',
+    deleteTimer: '删除这个计时器？',
+    delete: '删除',
+    cancel: '取消',
+    endsArrow: '截止',
+    netRemaining: '净剩余',
+    totalDeduct: '总计 · −',
+    workGoalLine: (worked, goal) => `学习 · ${worked} / ${goal}小时`,
+    sessionTracker: '会话追踪',
+    tracked: '已记录',
+    tapCategory: '点击类别开始记录 →',
+    restOver30m: '休息超 30 分钟！',
+    stop: '停止',
+    quickNote: '快速备注…',
+    pickDateAlert: '请先选择日期。',
+    demoName: '论文终稿冲刺'
+  }
+};
+
+const tr = key => (I18N[LANG] && I18N[LANG][key]) || I18N.en[key] || key;
 
 const DEDUCTS = [
   {id:'s6', label:'Sleep 6h', hours:6, cat:'sleep'},
@@ -443,16 +580,67 @@ const DEDUCTS = [
   {id:'m',  label:'Meals 1.5h', hours:1.5, cat:'rest'},
   {id:'c',  label:'Commute 1h', hours:1, cat:'work'},
 ];
+const dedLabel = {
+  s6: {en:'Sleep 6h', zh:'睡眠 6h'},
+  s7: {en:'Sleep 7h', zh:'睡眠 7h'},
+  s8: {en:'Sleep 8h', zh:'睡眠 8h'},
+  m:  {en:'Meals 1.5h', zh:'吃饭 1.5h'},
+  c:  {en:'Commute 1h', zh:'通勤 1h'}
+};
+const getDedLabel = id => (dedLabel[id] && dedLabel[id][LANG]) || (dedLabel[id] && dedLabel[id].en) || id;
 
 const catColor = id => id==='work'?'#1a1815':id==='rest'?'#8b6f5e':id==='sleep'?'#5c7a8b':CUSTOM_COLOR;
-const allCats  = t => [...BASE_CATS, {id:'custom', label:t.customLabel||'Other', color:CUSTOM_COLOR}];
+const allCats  = t => [
+  ...BASE_CATS.map(c => ({...c, label: tr(c.id)})),
+  {id:'custom', label:t.customLabel||tr('other'), color:CUSTOM_COLOR}
+];
+
+function applyTranslations() {
+  document.documentElement.lang = LANG === 'zh' ? 'zh-CN' : 'en';
+  document.title = `${tr('title')} · Timer`;
+  document.getElementById('title-app').textContent = tr('title');
+  document.getElementById('lang-btn').textContent = LANG === 'zh' ? 'EN / 中' : '中 / EN';
+  document.getElementById('lbl-work').textContent = tr('work');
+  document.getElementById('lbl-rest').textContent = tr('rest');
+  document.getElementById('lbl-sleep').textContent = tr('sleep');
+  document.getElementById('lbl-goal').textContent = tr('goal');
+  document.getElementById('empty-text').innerHTML = tr('noTimers');
+  document.getElementById('add-btn').innerHTML = `＋ &nbsp; ${tr('newTimer')}`;
+  document.getElementById('sheet-title').textContent = tr('newTimer');
+  document.getElementById('f-name-label').textContent = tr('name');
+  document.getElementById('f-name').placeholder = tr('namePlaceholder');
+  document.getElementById('f-duration-label').textContent = tr('duration');
+  document.getElementById('dur-eod-sub').textContent = tr('endOfDay');
+  document.getElementById('dur-custom-sub').textContent = tr('custom');
+  document.getElementById('f-end-label').textContent = tr('endDateTime');
+  document.getElementById('f-deduct-label').textContent = tr('deduct');
+  document.getElementById('f-ded-name').placeholder = tr('customDeductName');
+  document.getElementById('f-ded-hours').placeholder = tr('customDeductHoursPlaceholder');
+  document.getElementById('f-ded-add').textContent = tr('addDeduct');
+  document.getElementById('f-goal-label').textContent = tr('workGoalOptional');
+  document.getElementById('f-goal').placeholder = tr('goalPlaceholder');
+  document.getElementById('goal-unit').textContent = tr('focusedWork');
+  document.getElementById('f-nudge-label').textContent = tr('nudge');
+  document.getElementById('nudge-main').textContent = tr('restNudge');
+  document.getElementById('nudge-sub').textContent = tr('vibrateNudge');
+  document.getElementById('submit-btn').textContent = tr('createTimer');
+  renderCustomDedDraft();
+}
+
+function toggleLang() {
+  LANG = LANG === 'zh' ? 'en' : 'zh';
+  localStorage.setItem(LANG_KEY, LANG);
+  applyTranslations();
+  render();
+  clockTick();
+}
 
 // ─── STATE ──────────────────────────────────────────────
 let S = {timers:[]};
 try { const p=JSON.parse(localStorage.getItem('tt_v4')||'{}'); if(p.timers) S.timers=p.timers; } catch(e){}
 const save = () => { try{localStorage.setItem('tt_v4',JSON.stringify(S));}catch(e){} };
 
-let fDur=8, fDeds=[], fNudge=false;
+let fDur=8, fDeds=[], fCustomDeds=[], fNudge=false;
 
 // ─── UTILS ──────────────────────────────────────────────
 const pad = n => String(Math.floor(Math.abs(n))).padStart(2,'0');
@@ -463,14 +651,19 @@ const totalTracked = t => {
   const s = t.sessions.reduce((a,x)=>a+(x.end?(x.end-x.start)/1000:0),0);
   return s + (t.activeSession?(Date.now()-t.activeSession.start)/1000:0);
 };
+const dedPresetSecs = t => (t.deducts||[]).reduce((s,d)=>{const o=DEDUCTS.find(x=>x.id===d);return s+(o?o.hours*3600:0);},0);
+const dedCustomSecs = t => (t.customDeducts||[]).reduce((s,d)=>s+((Number(d.hours)||0)*3600),0);
+const dedTotalSecs = t => dedPresetSecs(t)+dedCustomSecs(t);
 
 // ─── CLOCK ──────────────────────────────────────────────
 function clockTick(){
   const n=new Date();
-  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const mos=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   document.getElementById('h-clock').textContent=`${pad(n.getHours())}:${pad(n.getMinutes())}:${pad(n.getSeconds())}`;
-  document.getElementById('h-date').textContent=`${days[n.getDay()]} ${mos[n.getMonth()]} ${n.getDate()}`;
+  document.getElementById('h-date').textContent = n.toLocaleDateString(LANG === 'zh' ? 'zh-CN' : 'en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  });
 }
 
 // ─── SUMMARY ────────────────────────────────────────────
@@ -513,7 +706,7 @@ function render(){
 function buildCard(t){
   const now=Date.now();
   const totalSecs=Math.max(0,(t.targetTime-now)/1000);
-  const dedSecs=t.deducts.reduce((s,d)=>{const o=DEDUCTS.find(x=>x.id===d);return s+(o?o.hours*3600:0);},0);
+  const dedSecs=dedTotalSecs(t);
   const netSecs=Math.max(0,totalSecs-dedSecs);
   const pct=Math.max(0,Math.min(100,(1-totalSecs/t.originalSecs)*100));
 
@@ -526,7 +719,12 @@ function buildCard(t){
   // deduct chips
   const dHtml=t.deducts.map(d=>{
     const o=DEDUCTS.find(x=>x.id===d); if(!o) return '';
-    return `<div class="chip-small"><div class="chip-dot" style="background:${catColor(o.cat)}"></div>${o.label}</div>`;
+    return `<div class="chip-small"><div class="chip-dot" style="background:${catColor(o.cat)}"></div>${getDedLabel(o.id)}</div>`;
+  }).join('') + (t.customDeducts||[]).map(d=>{
+    const label = (d.label||tr('custom')).trim();
+    const hours = Number(d.hours)||0;
+    if(hours<=0) return '';
+    return `<div class="chip-small"><div class="chip-dot" style="background:${CUSTOM_COLOR}"></div>${label} ${hours}h</div>`;
   }).join('');
 
   // session bar segs
@@ -538,22 +736,22 @@ function buildCard(t){
   const barHtml=segs.length?`
     <div class="sbar">${segs.map(x=>`<div class="sbar-seg" style="width:${Math.min(100,x.secs/t.originalSecs*100)}%;background:${x.cat.color};opacity:0.6"></div>`).join('')}</div>
     <div class="sbar-stats">${segs.map(x=>`<div class="sbar-stat"><div class="sbar-dot" style="background:${x.cat.color}"></div><span class="sbar-l">${x.cat.label}</span><span class="sbar-v">${hm(x.secs)}</span></div>`).join('')}</div>`
-    :`<div style="font-size:10px;color:var(--text3)">Tap a category to start tracking →</div>`;
+    :`<div style="font-size:10px;color:var(--text3)">${tr('tapCategory')}</div>`;
 
   const div=document.createElement('div');
   div.className='card'; div.dataset.id=t.id;
   div.innerHTML=`
     <div class="del-layer" id="del-${t.id}">
-      <span class="del-text">Delete timer?</span>
-      <button class="del-yes" onclick="doDelete('${t.id}')">Delete</button>
-      <button class="del-no" onclick="cancelDel('${t.id}')">Cancel</button>
+      <span class="del-text">${tr('deleteTimer')}</span>
+      <button class="del-yes" onclick="doDelete('${t.id}')">${tr('delete')}</button>
+      <button class="del-no" onclick="cancelDel('${t.id}')">${tr('cancel')}</button>
     </div>
 
     <div class="card-head">
       <div style="flex:1;min-width:0">
         <div class="card-name">${t.name}</div>
         <div class="card-meta">
-          <span class="card-ends">→ ${new Date(t.targetTime).toLocaleDateString('en',{month:'short',day:'numeric'})} ${new Date(t.targetTime).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})}</span>
+          <span class="card-ends">${tr('endsArrow')} ${new Date(t.targetTime).toLocaleDateString(LANG === 'zh' ? 'zh-CN' : 'en-US',{month:'short',day:'numeric'})} ${new Date(t.targetTime).toLocaleTimeString(LANG === 'zh' ? 'zh-CN' : 'en-US',{hour:'2-digit',minute:'2-digit'})}</span>
           ${dHtml}
         </div>
       </div>
@@ -562,19 +760,19 @@ function buildCard(t){
 
     <div class="card-cd">
       <div>
-        <div class="cd-lbl">net remaining</div>
+        <div class="cd-lbl">${tr('netRemaining')}</div>
         <div class="cd-big" id="net-${t.id}">${hms(netSecs)}</div>
       </div>
       <div class="cd-right">
         <div class="cd-tot" id="tot-${t.id}">${hms(totalSecs)}</div>
-        <div class="cd-ded">total · −${hm(dedSecs)}</div>
+        <div class="cd-ded">${tr('totalDeduct')}${hm(dedSecs)}</div>
       </div>
     </div>
 
     ${t.workGoal?`
     <div class="goal-section">
       <div class="goal-row">
-        <span class="goal-lbl">Work · ${hm(wSecs)} of ${t.workGoal}h goal</span>
+        <span class="goal-lbl">${I18N[LANG].workGoalLine(hm(wSecs), t.workGoal)}</span>
         <span class="goal-pct">${Math.round(gPct)}%</span>
       </div>
       <div class="goal-track"><div class="goal-fill" id="gf-${t.id}" style="width:${gPct}%"></div></div>
@@ -584,8 +782,8 @@ function buildCard(t){
 
     <div class="sess-section">
       <div class="sess-top">
-        <span class="sess-lbl">Session Tracker</span>
-        <span class="sess-tot" id="stot-${t.id}">${hm(tracked)} tracked</span>
+        <span class="sess-lbl">${tr('sessionTracker')}</span>
+        <span class="sess-tot" id="stot-${t.id}">${hm(tracked)} ${tr('tracked')}</span>
       </div>
 
       <div class="cat-row">
@@ -594,25 +792,25 @@ function buildCard(t){
             onclick="startSess('${t.id}','${c.id}')">
             <div class="cat-dot"></div>
             ${c.id==='custom'
-              ?`<input class="cat-name-input" id="cl-${t.id}" value="${t.customLabel||'Other'}"
+              ?`<input class="cat-name-input" id="cl-${t.id}" value="${t.customLabel||tr('other')}"
                   onclick="event.stopPropagation()"
                   onblur="saveLabel('${t.id}',this.value)"
                   onkeydown="if(event.key==='Enter')this.blur()">`
               :c.label}
           </button>`).join('')}
-        <span class="nudge-badge" id="nb-${t.id}">rest &gt; 30m !</span>
+        <span class="nudge-badge" id="nb-${t.id}">${tr('restOver30m')}</span>
       </div>
 
       <div class="abar ${act?'show':''}" id="ab-${t.id}">
         <div class="a-pulse" style="background:${act?catColor(act.catId):'#888'}"></div>
         <span class="a-label">${act?cats.find(c=>c.id===act.catId)?.label||'Custom':''}</span>
         <span class="a-time" id="at-${t.id}">${hms(act?(now-act.start)/1000:0)}</span>
-        <button class="stop-btn" onclick="stopSess('${t.id}')">Stop</button>
+        <button class="stop-btn" onclick="stopSess('${t.id}')">${tr('stop')}</button>
       </div>
 
       <div class="note-row ${act?'show':''}" id="nr-${t.id}">
         <span class="note-icon">✎</span>
-        <input class="note-inp" id="ni-${t.id}" placeholder="quick note…"
+        <input class="note-inp" id="ni-${t.id}" placeholder="${tr('quickNote')}"
           value="${act?.note||''}" oninput="saveNote('${t.id}',this.value)">
       </div>
 
@@ -626,7 +824,7 @@ function tick(){
   const now=Date.now();
   S.timers.forEach(t=>{
     const totalSecs=Math.max(0,(t.targetTime-now)/1000);
-    const dedSecs=t.deducts.reduce((s,d)=>{const o=DEDUCTS.find(x=>x.id===d);return s+(o?o.hours*3600:0);},0);
+    const dedSecs=dedTotalSecs(t);
     const netSecs=Math.max(0,totalSecs-dedSecs);
     const pct=Math.max(0,Math.min(100,(1-totalSecs/t.originalSecs)*100));
 
@@ -641,7 +839,7 @@ function tick(){
 
       // tracked total
       const tracked=t.sessions.reduce((a,x)=>a+(x.end?(x.end-x.start)/1000:0),0)+el;
-      if(e(`stot-${t.id}`)) e(`stot-${t.id}`).textContent=`${hm(tracked)} tracked`;
+      if(e(`stot-${t.id}`)) e(`stot-${t.id}`).textContent=`${hm(tracked)} ${tr('tracked')}`;
 
       // work goal bar
       if(t.workGoal && e(`gf-${t.id}`)){
@@ -678,7 +876,7 @@ function stopSess(tid){
   t.activeSession=null; save();render();
 }
 function saveNote(tid,val){ const t=S.timers.find(x=>x.id===tid); if(t&&t.activeSession) t.activeSession.note=val; }
-function saveLabel(tid,val){ const t=S.timers.find(x=>x.id===tid); if(t){t.customLabel=val.trim()||'Other';save();} }
+function saveLabel(tid,val){ const t=S.timers.find(x=>x.id===tid); if(t){t.customLabel=val.trim()||tr('other');save();} }
 
 // ─── DELETE ──────────────────────────────────────────────
 function askDel(id){ document.getElementById(`del-${id}`).classList.add('show'); setTimeout(()=>cancelDel(id),4000); }
@@ -698,7 +896,7 @@ function buildDedRow(){
     const on=fDeds.includes(o.id),c=catColor(o.cat);
     const d=document.createElement('div');
     d.className='dchip'+(on?' on':''); d.style.setProperty('--dc',c);
-    d.innerHTML=`<div class="dchip-dot"></div>${o.label}`;
+    d.innerHTML=`<div class="dchip-dot"></div>${getDedLabel(o.id)}`;
     d.onclick=()=>{
       if(fDeds.includes(o.id)) fDeds=fDeds.filter(x=>x!==o.id);
       else{ if(o.id.startsWith('s')) fDeds=fDeds.filter(x=>!x.startsWith('s')); fDeds.push(o.id); }
@@ -707,30 +905,57 @@ function buildDedRow(){
     w.appendChild(d);
   });
 }
+function renderCustomDedDraft(){
+  const list=document.getElementById('custom-ded-list');
+  list.innerHTML='';
+  fCustomDeds.forEach((d,idx)=>{
+    const el=document.createElement('div');
+    el.className='custom-ded-item';
+    el.innerHTML=`<span>${(d.label||tr('customDeductName')).trim()} ${d.hours}h</span><button class="custom-ded-remove" onclick="removeCustomDed(${idx})">✕</button>`;
+    list.appendChild(el);
+  });
+}
+function addCustomDed(){
+  const nameEl=document.getElementById('f-ded-name');
+  const hourEl=document.getElementById('f-ded-hours');
+  const hours=parseFloat(hourEl.value);
+  if(isNaN(hours)||hours<=0){ alert(tr('customDeductHoursAlert')); return; }
+  const label=(nameEl.value||'').trim() || tr('customDeductName');
+  fCustomDeds.push({label,hours:Math.round(hours*10)/10});
+  nameEl.value=''; hourEl.value='';
+  renderCustomDedDraft();
+}
+function removeCustomDed(idx){
+  fCustomDeds=fCustomDeds.filter((_,i)=>i!==idx);
+  renderCustomDedDraft();
+}
 function openSheet(){
-  fDur=8; fDeds=[];
+  fDur=8; fDeds=[]; fCustomDeds=[];
   document.getElementById('f-name').value='';
   document.getElementById('f-custom').value='';
+  document.getElementById('f-ded-name').value='';
+  document.getElementById('f-ded-hours').value='';
   document.getElementById('f-goal').value='';
   document.getElementById('nudge-tog').classList.remove('on');
   document.getElementById('custom-field').style.display='none';
   document.querySelectorAll('.dur-chip').forEach((c,i)=>c.classList.toggle('sel',i===2));
   buildDedRow();
+  renderCustomDedDraft();
   document.getElementById('add-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('f-name').focus(),320);
 }
 function createTimer(){
-  const name=document.getElementById('f-name').value.trim()||'Timer';
+  const name=document.getElementById('f-name').value.trim()||tr('timerDefaultName');
   const cv=document.getElementById('f-custom').value;
   const nudge=document.getElementById('nudge-tog').classList.contains('on');
   const gr=parseFloat(document.getElementById('f-goal').value);
   const workGoal=isNaN(gr)||gr<=0?null:gr;
   let targetTime;
   if(fDur==='eod'){ const e=new Date(); e.setHours(23,59,0,0); targetTime=e.getTime(); }
-  else if(fDur==='custom'){ if(!cv){alert('Please pick a date.');return;} targetTime=new Date(cv).getTime(); }
+  else if(fDur==='custom'){ if(!cv){alert(tr('pickDateAlert'));return;} targetTime=new Date(cv).getTime(); }
   else targetTime=Date.now()+fDur*3600*1000;
   S.timers.unshift({id:'t_'+Date.now(),name,targetTime,originalSecs:(targetTime-Date.now())/1000,
-    deducts:[...fDeds],sessions:[],activeSession:null,workGoal,nudge,customLabel:'Other',createdAt:Date.now()});
+    deducts:[...fDeds],customDeducts:[...fCustomDeds],sessions:[],activeSession:null,workGoal,nudge,customLabel:tr('other'),createdAt:Date.now()});
   save(); document.getElementById('add-overlay').classList.remove('open'); render();
 }
 function bgClose(e,id){ if(e.target.id===id) document.getElementById(id).classList.remove('open'); }
@@ -738,19 +963,23 @@ function bgClose(e,id){ if(e.target.id===id) document.getElementById(id).classLi
 // ─── INIT ────────────────────────────────────────────────
 if(S.timers.length===0){
   S.timers.push({
-    id:'t_demo',name:'Thesis Final Draft',
+    id:'t_demo',name:tr('demoName'),
     targetTime:Date.now()+48*3600*1000,originalSecs:48*3600,
     deducts:['s8','m'],
+    customDeducts:[{label:LANG==='zh'?'通话':'Call',hours:0.5}],
     sessions:[
       {catId:'work',start:Date.now()-5400000,end:Date.now()-3600000,note:'lit review outline'},
       {catId:'rest',start:Date.now()-3600000,end:Date.now()-3000000,note:''},
       {catId:'work',start:Date.now()-3000000,end:Date.now()-900000,note:'methodology section'},
     ],
-    activeSession:null,workGoal:6,nudge:true,customLabel:'Meeting',createdAt:Date.now()-7200000
+    activeSession:null,workGoal:6,nudge:true,customLabel:LANG==='zh'?'会议':'Meeting',createdAt:Date.now()-7200000
   });
   save();
 }
-render(); clockTick(); setInterval(()=>{clockTick();tick();},1000);
+applyTranslations();
+render();
+clockTick();
+setInterval(()=>{clockTick();tick();},1000);
 </script>
 
 <script>
