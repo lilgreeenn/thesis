@@ -70,6 +70,12 @@ body {
   font-size: 10px; color: var(--text2); padding: 3px 8px; cursor: pointer; font-family: 'DM Sans', sans-serif;
 }
 .daybar-btn:active { background: var(--border); }
+.daybar-right { display: flex; align-items: center; gap: 6px; }
+.daybar-chip {
+  border: 1px solid var(--border2); background: var(--bg); border-radius: 999px;
+  font-size: 10px; color: var(--text2); padding: 3px 8px; cursor: pointer; font-family: 'DM Sans', sans-serif;
+}
+.daybar-chip.on { background: var(--text); color: var(--bg); border-color: var(--text); }
 
 /* ── SUMMARY BAR ── */
 .summary-bar {
@@ -425,7 +431,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 <div class="daybar">
   <button class="daybar-btn" id="day-prev" onclick="shiftViewDay(-1)">◀</button>
   <div class="daybar-center" id="day-label">---</div>
-  <button class="daybar-btn" id="day-next" onclick="shiftViewDay(1)">▶</button>
+  <div class="daybar-right">
+    <button class="daybar-chip" id="focus-chip" onclick="toggleFocusMode()">只看当前</button>
+    <button class="daybar-btn" id="day-next" onclick="shiftViewDay(1)">▶</button>
+  </div>
 </div>
 
 <div class="summary-bar">
@@ -544,6 +553,7 @@ const CUSTOM_COLOR = '#9a8570';
 const LANG_KEY = 'tt_lang';
 let LANG = localStorage.getItem(LANG_KEY) || (document.documentElement.lang.startsWith('zh') ? 'zh' : 'en');
 const VIEW_DAY_KEY = 'tt_view_day';
+const FOCUS_MODE_KEY = 'tt_focus_mode';
 
 const I18N = {
   en: {
@@ -557,6 +567,7 @@ const I18N = {
     newTimer: 'New Timer',
     viewingDay: 'Day',
     today: 'Today',
+    focusMode: 'Only current',
     name: 'Name',
     namePlaceholder: 'Chapter 3 · Defense · Revisions…',
     duration: 'Duration',
@@ -589,6 +600,8 @@ const I18N = {
     distracted: 'Distracted',
     returnTask: 'Back to task',
     distractedLogged: 'Logged',
+    distractedReasonPrompt: 'Why distracted?',
+    distractedNoReason: 'No reason',
     rewardGreat: 'Nice! Sprint completed ✨',
     dailyMinimumLine: 'Daily minimum line (optional)',
     dailyMinimumPlaceholder: 'e.g. Outline, 500 words, References',
@@ -626,6 +639,7 @@ const I18N = {
     newTimer: '新建计时器',
     viewingDay: '日期',
     today: '今天',
+    focusMode: '只看当前',
     name: '名称',
     namePlaceholder: '第3章 · 答辩 · 修改…',
     duration: '时长',
@@ -658,6 +672,8 @@ const I18N = {
     distracted: '走神一下',
     returnTask: '回到任务',
     distractedLogged: '已记录',
+    distractedReasonPrompt: '走神原因？',
+    distractedNoReason: '未填写原因',
     rewardGreat: '太好了！完成一个冲刺 ✨',
     dailyMinimumLine: '每日最低成功线（可选）',
     dailyMinimumPlaceholder: '例如：大纲、500字、参考文献',
@@ -756,6 +772,8 @@ function applyTranslations() {
   document.getElementById('submit-btn').textContent = tr('createTimer');
   document.getElementById('day-prev').textContent = '◀';
   document.getElementById('day-next').textContent = '▶';
+  document.getElementById('focus-chip').textContent = tr('focusMode');
+  document.getElementById('focus-chip').classList.toggle('on', FOCUS_MODE);
   renderCustomDedDraft();
   updateDayLabel();
 }
@@ -778,6 +796,12 @@ function shiftViewDay(delta){
   VIEW_DAY = shiftDayKey(VIEW_DAY, delta);
   localStorage.setItem(VIEW_DAY_KEY, VIEW_DAY);
   updateDayLabel();
+  render();
+}
+function toggleFocusMode(){
+  FOCUS_MODE=!FOCUS_MODE;
+  localStorage.setItem(FOCUS_MODE_KEY, FOCUS_MODE?'1':'0');
+  document.getElementById('focus-chip').classList.toggle('on', FOCUS_MODE);
   render();
 }
 
@@ -836,6 +860,7 @@ const viewNowMs = () => {
 const fmtDayLabel = key => new Date(`${key}T00:00:00`).toLocaleDateString(LANG==='zh'?'zh-CN':'en-US',{month:'short',day:'numeric',weekday:'short'});
 const newGoalItem = text => ({id:`g_${Date.now()}_${Math.floor(Math.random()*999)}`, text, done:false});
 let VIEW_DAY = localStorage.getItem(VIEW_DAY_KEY) || dayKey();
+let FOCUS_MODE = localStorage.getItem(FOCUS_MODE_KEY) === '1';
 function normalizeTimer(t){
   if(!t.customDeducts) t.customDeducts=[];
   if(!t.customCats) t.customCats=[];
@@ -844,6 +869,7 @@ function normalizeTimer(t){
   if(!t.distractions) t.distractions=[];
   if(!t.pageDate) t.pageDate = dayFromTs(t.createdAt || Date.now());
   if(!t.distractionActiveStart) t.distractionActiveStart=null;
+  if(!t.distractionActiveReason) t.distractionActiveReason='';
   if(!t.dailyLine) t.dailyLine={date:dayKey(),items:[]};
   if(!t.dailyLine.items) t.dailyLine.items=[];
   if(t.dailyLine.date!==dayKey()){
@@ -953,8 +979,17 @@ function updateSummary(){
 // ─── RENDER ─────────────────────────────────────────────
 function render(){
   const wrap=document.getElementById('events-wrap');
-  const dayTimers = [];
+  let dayTimers = [];
   S.timers.forEach(t=>{ normalizeTimer(t); if(timerVisibleOnDay(t, VIEW_DAY)) dayTimers.push(t); });
+  if(FOCUS_MODE){
+    const active = dayTimers.filter(t=>!!t.activeSession);
+    if(active.length){
+      dayTimers = active;
+    } else {
+      const unfinished = dayTimers.filter(t=>t.targetTime > Date.now());
+      dayTimers = unfinished.length ? [unfinished[0]] : (dayTimers[0] ? [dayTimers[0]] : []);
+    }
+  }
   document.getElementById('empty-state').style.display=dayTimers.length?'none':'';
   document.getElementById('empty-text').innerHTML = VIEW_DAY===dayKey() ? tr('noTimers') : tr('noTimersOnDay');
   Array.from(wrap.querySelectorAll('.card')).forEach(c=>c.remove());
@@ -1007,7 +1042,7 @@ function buildCard(t){
     ...(act ? [{catId:act.catId, sec:(now-act.start)/1000, active:true}] : []),
     ...[...t.sessions].slice(-8).reverse().map(s=>({catId:s.catId, sec:(s.end-s.start)/1000, active:false})),
     ...(t.distractionActiveStart ? [{isDistract:true, active:true, start:t.distractionActiveStart}] : []),
-    ...(t.distractions||[]).slice(-5).reverse().map(d=>({isDistract:true, start:d.start, durationSec:d.durationSec||0}))
+    ...(t.distractions||[]).slice(-5).reverse().map(d=>({isDistract:true, start:d.start, durationSec:d.durationSec||0, reason:d.reason||''}))
   ];
   const historyHtml = historyRows.length
     ? `<div class="sess-log">
@@ -1016,7 +1051,7 @@ function buildCard(t){
           <div class="sess-log-row">
             <span class="sess-log-name">
               <span class="sess-log-dot" style="background:${r.isDistract?'var(--c-rest)':catColor(r.catId)}"></span>
-              ${r.isDistract?`⚡ ${tr('distractedLogged')}${r.active?` · ${tr('runningNow')}`:''}`:`${catLabelById(t, r.catId)}${r.active?` · ${tr('runningNow')}`:''}`}
+              ${r.isDistract?`⚡ ${tr('distractedLogged')}${r.active?` · ${tr('runningNow')}`:''}${r.reason?` · ${r.reason}`:''}`:`${catLabelById(t, r.catId)}${r.active?` · ${tr('runningNow')}`:''}`}
             </span>
             <span class="sess-log-time" ${(r.isDistract&&r.active)?`id="dlive-${t.id}"`:(r.active?`id="hlive-${t.id}"`:'')}>${r.isDistract?(r.active?hm((now-r.start)/1000):`${new Date(r.start).toLocaleTimeString(LANG==='zh'?'zh-CN':'en-US',{hour:'2-digit',minute:'2-digit'})} · ${hm(r.durationSec)}`):hm(r.sec)}</span>
           </div>`).join('')}
@@ -1210,12 +1245,20 @@ function markDistracted(tid){
   const now=Date.now();
   if(t.distractionActiveStart){
     const durationSec=Math.max(1,Math.round((now-t.distractionActiveStart)/1000));
-    t.distractions.unshift({start:t.distractionActiveStart,end:now,durationSec});
+    t.distractions.unshift({
+      start:t.distractionActiveStart,
+      end:now,
+      durationSec,
+      reason:t.distractionActiveReason||''
+    });
     t.distractionActiveStart=null;
+    t.distractionActiveReason='';
     navigator.vibrate && navigator.vibrate([40,30,40]);
     showRewardToast(tr('returnTask'));
   }else{
+    const reason = prompt(tr('distractedReasonPrompt'), '') || '';
     t.distractionActiveStart=now;
+    t.distractionActiveReason=reason.trim() || tr('distractedNoReason');
     navigator.vibrate && navigator.vibrate(30);
     showRewardToast(tr('distracted'));
   }
