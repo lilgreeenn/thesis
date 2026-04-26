@@ -60,6 +60,16 @@ body {
 .header-right { text-align: right; }
 .header-clock { font-family: 'DM Mono', monospace; font-size: 15px; color: var(--text); }
 .header-date  { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text3); margin-top: 1px; }
+.daybar {
+  padding: 8px 22px 10px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; background: var(--surface);
+}
+.daybar-center { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text2); }
+.daybar-btn {
+  border: 1px solid var(--border2); background: transparent; border-radius: 7px;
+  font-size: 10px; color: var(--text2); padding: 3px 8px; cursor: pointer; font-family: 'DM Sans', sans-serif;
+}
+.daybar-btn:active { background: var(--border); }
 
 /* ── SUMMARY BAR ── */
 .summary-bar {
@@ -221,6 +231,35 @@ body {
   margin-top: 2px; padding-top: 6px; border-top: 1px solid var(--border);
   display: flex; justify-content: space-between; font-size: 11px; color: var(--text2);
 }
+.focus-tools { display: flex; gap: 8px; margin: 8px 0; }
+.focus-btn {
+  padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border2);
+  background: var(--surface); color: var(--text2); font-size: 11px;
+  font-family: 'DM Sans', sans-serif; cursor: pointer;
+}
+.focus-btn:active { background: var(--border); }
+.goalline {
+  margin-top: 8px; border-top: 1px dashed var(--border);
+  padding-top: 8px; display: flex; flex-direction: column; gap: 6px;
+}
+.goalline-head { display: flex; justify-content: space-between; align-items: center; }
+.goalline-title { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
+.goalline-sum { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text2); }
+.goal-item { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); }
+.goal-item input { accent-color: var(--text); }
+.goal-text { flex: 1; cursor: pointer; }
+.goal-add {
+  border: 1px solid var(--border2); background: transparent; color: var(--text3);
+  border-radius: 6px; font-size: 10px; padding: 2px 7px; cursor: pointer;
+}
+.reward-toast {
+  position: fixed; left: 50%; transform: translateX(-50%) translateY(16px);
+  bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 420;
+  background: var(--text); color: var(--bg); border-radius: 12px;
+  padding: 10px 14px; font-size: 12px; opacity: 0; pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.reward-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* Nudge badge */
 .nudge-badge {
@@ -383,6 +422,12 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
   </div>
 </div>
 
+<div class="daybar">
+  <button class="daybar-btn" id="day-prev" onclick="shiftViewDay(-1)">◀</button>
+  <div class="daybar-center" id="day-label">---</div>
+  <button class="daybar-btn" id="day-next" onclick="shiftViewDay(1)">▶</button>
+</div>
+
 <div class="summary-bar">
   <div class="sum-item">
     <div class="sum-dot" style="background:var(--c-work)"></div>
@@ -468,6 +513,11 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
     </div>
 
     <div class="field">
+      <label id="f-dailyline-label">Daily minimum line (optional)</label>
+      <input class="inp" id="f-dailyline" placeholder="e.g. Outline, 500 words, References">
+    </div>
+
+    <div class="field">
       <label id="f-nudge-label">Nudge</label>
       <div class="toggle-row">
         <div class="toggle-txt">
@@ -481,6 +531,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
     <button class="submit-btn" id="submit-btn" onclick="createTimer()">Create Timer</button>
   </div>
 </div>
+<div class="reward-toast" id="reward-toast"></div>
 
 <script>
 // ─── DATA ───────────────────────────────────────────────
@@ -492,6 +543,7 @@ const BASE_CATS = [
 const CUSTOM_COLOR = '#9a8570';
 const LANG_KEY = 'tt_lang';
 let LANG = localStorage.getItem(LANG_KEY) || (document.documentElement.lang.startsWith('zh') ? 'zh' : 'en');
+const VIEW_DAY_KEY = 'tt_view_day';
 
 const I18N = {
   en: {
@@ -501,7 +553,10 @@ const I18N = {
     sleep: 'Sleep',
     goal: 'goal',
     noTimers: 'No timers yet.<br>Add one below.',
+    noTimersOnDay: 'No timers on this day.<br>Tap below to create one.',
     newTimer: 'New Timer',
+    viewingDay: 'Day',
+    today: 'Today',
     name: 'Name',
     namePlaceholder: 'Chapter 3 · Defense · Revisions…',
     duration: 'Duration',
@@ -531,6 +586,17 @@ const I18N = {
     restNudge: 'Rest nudge',
     vibrateNudge: 'Vibrate after 30 min resting',
     createTimer: 'Create Timer',
+    distracted: 'Distracted',
+    returnTask: 'Back to task',
+    distractedLogged: 'Logged',
+    rewardGreat: 'Nice! Sprint completed ✨',
+    dailyMinimumLine: 'Daily minimum line (optional)',
+    dailyMinimumPlaceholder: 'e.g. Outline, 500 words, References',
+    dailyGoalTitle: 'Daily minimum line',
+    dailyGoalDone: 'done',
+    addGoalItem: 'Add goal',
+    addGoalPrompt: 'Add one goal item',
+    editGoalPrompt: 'Edit goal item',
     timerDefaultName: 'Timer',
     other: 'Other',
     deleteTimer: 'Delete timer?',
@@ -556,7 +622,10 @@ const I18N = {
     sleep: '睡眠',
     goal: '目标',
     noTimers: '还没有计时器。<br>点下方按钮新建。',
+    noTimersOnDay: '这一天还没有计时器。<br>点下方按钮新建。',
     newTimer: '新建计时器',
+    viewingDay: '日期',
+    today: '今天',
     name: '名称',
     namePlaceholder: '第3章 · 答辩 · 修改…',
     duration: '时长',
@@ -586,6 +655,17 @@ const I18N = {
     restNudge: '休息提醒',
     vibrateNudge: '连续休息 30 分钟后震动提醒',
     createTimer: '创建计时器',
+    distracted: '走神一下',
+    returnTask: '回到任务',
+    distractedLogged: '已记录',
+    rewardGreat: '太好了！完成一个冲刺 ✨',
+    dailyMinimumLine: '每日最低成功线（可选）',
+    dailyMinimumPlaceholder: '例如：大纲、500字、参考文献',
+    dailyGoalTitle: '每日最低成功线',
+    dailyGoalDone: '已完成',
+    addGoalItem: '添加目标',
+    addGoalPrompt: '添加一个目标条目',
+    editGoalPrompt: '编辑目标条目',
     timerDefaultName: '计时器',
     other: '其他',
     deleteTimer: '删除这个计时器？',
@@ -668,11 +748,16 @@ function applyTranslations() {
   document.getElementById('f-goal-label').textContent = tr('workGoalOptional');
   document.getElementById('f-goal').placeholder = tr('goalPlaceholder');
   document.getElementById('goal-unit').textContent = tr('focusedWork');
+  document.getElementById('f-dailyline-label').textContent = tr('dailyMinimumLine');
+  document.getElementById('f-dailyline').placeholder = tr('dailyMinimumPlaceholder');
   document.getElementById('f-nudge-label').textContent = tr('nudge');
   document.getElementById('nudge-main').textContent = tr('restNudge');
   document.getElementById('nudge-sub').textContent = tr('vibrateNudge');
   document.getElementById('submit-btn').textContent = tr('createTimer');
+  document.getElementById('day-prev').textContent = '◀';
+  document.getElementById('day-next').textContent = '▶';
   renderCustomDedDraft();
+  updateDayLabel();
 }
 
 function toggleLang() {
@@ -681,6 +766,19 @@ function toggleLang() {
   applyTranslations();
   render();
   clockTick();
+}
+
+function updateDayLabel(){
+  const lbl=document.getElementById('day-label');
+  if(!lbl) return;
+  const base = `${tr('viewingDay')}: ${fmtDayLabel(VIEW_DAY)}`;
+  lbl.textContent = VIEW_DAY===dayKey() ? `${base} · ${tr('today')}` : base;
+}
+function shiftViewDay(delta){
+  VIEW_DAY = shiftDayKey(VIEW_DAY, delta);
+  localStorage.setItem(VIEW_DAY_KEY, VIEW_DAY);
+  updateDayLabel();
+  render();
 }
 
 // ─── STATE ──────────────────────────────────────────────
@@ -702,6 +800,65 @@ const totalTracked = t => {
 const dedPresetSecs = t => (t.deducts||[]).reduce((s,d)=>{const o=DEDUCTS.find(x=>x.id===d);return s+(o?o.hours*3600:0);},0);
 const dedCustomSecs = t => (t.customDeducts||[]).reduce((s,d)=>s+((Number(d.hours)||0)*3600),0);
 const dedTotalSecs = t => dedPresetSecs(t)+dedCustomSecs(t);
+const dayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+const dayFromTs = ts => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+const dayStartMs = key => {
+  const [y,m,d]=key.split('-').map(Number);
+  return new Date(y,m-1,d,0,0,0,0).getTime();
+};
+const dayEndMs = key => dayStartMs(key) + 24*3600*1000;
+const shiftDayKey = (key, delta) => {
+  const d=new Date(`${key}T00:00:00`);
+  d.setDate(d.getDate()+delta);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
+const compareDayKey = (a,b) => a===b ? 0 : (a>b ? 1 : -1);
+const timerVisibleOnDay = (t, key) => {
+  const start = t.createdAt || Date.now();
+  const end = t.targetTime;
+  const ds = dayStartMs(key);
+  const de = dayEndMs(key);
+  return end > ds && start < de;
+};
+const viewNowMs = () => {
+  const today = dayKey();
+  const cmp = compareDayKey(VIEW_DAY, today);
+  if(cmp===0) return Date.now(); // today: realtime
+  if(cmp>0) return dayStartMs(VIEW_DAY); // future day: preview from 00:00
+  return dayEndMs(VIEW_DAY)-1000; // past day: snapshot at end of day
+};
+const fmtDayLabel = key => new Date(`${key}T00:00:00`).toLocaleDateString(LANG==='zh'?'zh-CN':'en-US',{month:'short',day:'numeric',weekday:'short'});
+const newGoalItem = text => ({id:`g_${Date.now()}_${Math.floor(Math.random()*999)}`, text, done:false});
+let VIEW_DAY = localStorage.getItem(VIEW_DAY_KEY) || dayKey();
+function normalizeTimer(t){
+  if(!t.customDeducts) t.customDeducts=[];
+  if(!t.customCats) t.customCats=[];
+  if(!t.catLabels) t.catLabels={};
+  if(!t.hiddenCatIds) t.hiddenCatIds=[];
+  if(!t.distractions) t.distractions=[];
+  if(!t.pageDate) t.pageDate = dayFromTs(t.createdAt || Date.now());
+  if(!t.distractionActiveStart) t.distractionActiveStart=null;
+  if(!t.dailyLine) t.dailyLine={date:dayKey(),items:[]};
+  if(!t.dailyLine.items) t.dailyLine.items=[];
+  if(t.dailyLine.date!==dayKey()){
+    t.dailyLine.date=dayKey();
+    t.dailyLine.items=t.dailyLine.items.map(i=>({...i,done:false}));
+  }
+}
+
+function showRewardToast(msg){
+  const el=document.getElementById('reward-toast');
+  if(!el) return;
+  el.textContent=msg;
+  el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'),1600);
+}
 const getDeductItems = t => {
   const preset = (t.deducts || []).map(id => {
     const o = DEDUCTS.find(x=>x.id===id);
@@ -796,9 +953,12 @@ function updateSummary(){
 // ─── RENDER ─────────────────────────────────────────────
 function render(){
   const wrap=document.getElementById('events-wrap');
-  document.getElementById('empty-state').style.display=S.timers.length?'none':'';
+  const dayTimers = [];
+  S.timers.forEach(t=>{ normalizeTimer(t); if(timerVisibleOnDay(t, VIEW_DAY)) dayTimers.push(t); });
+  document.getElementById('empty-state').style.display=dayTimers.length?'none':'';
+  document.getElementById('empty-text').innerHTML = VIEW_DAY===dayKey() ? tr('noTimers') : tr('noTimersOnDay');
   Array.from(wrap.querySelectorAll('.card')).forEach(c=>c.remove());
-  S.timers.forEach(t=>wrap.appendChild(buildCard(t)));
+  dayTimers.forEach(t=>wrap.appendChild(buildCard(t)));
   bindLongPressInteractive();
   updateSummary();
 }
@@ -813,7 +973,7 @@ function bindLongPressInteractive(){
 }
 
 function buildCard(t){
-  const now=Date.now();
+  const now=viewNowMs();
   const totalSecs=Math.max(0,(t.targetTime-now)/1000);
   const dedSecs=dedTotalSecs(t);
   const netSecs=Math.max(0,totalSecs-dedSecs);
@@ -845,7 +1005,9 @@ function buildCard(t){
 
   const historyRows = [
     ...(act ? [{catId:act.catId, sec:(now-act.start)/1000, active:true}] : []),
-    ...[...t.sessions].slice(-8).reverse().map(s=>({catId:s.catId, sec:(s.end-s.start)/1000, active:false}))
+    ...[...t.sessions].slice(-8).reverse().map(s=>({catId:s.catId, sec:(s.end-s.start)/1000, active:false})),
+    ...(t.distractionActiveStart ? [{isDistract:true, active:true, start:t.distractionActiveStart}] : []),
+    ...(t.distractions||[]).slice(-5).reverse().map(d=>({isDistract:true, start:d.start, durationSec:d.durationSec||0}))
   ];
   const historyHtml = historyRows.length
     ? `<div class="sess-log">
@@ -853,10 +1015,10 @@ function buildCard(t){
         ${historyRows.map((r,idx)=>`
           <div class="sess-log-row">
             <span class="sess-log-name">
-              <span class="sess-log-dot" style="background:${catColor(r.catId)}"></span>
-              ${catLabelById(t, r.catId)}${r.active?` · ${tr('runningNow')}`:''}
+              <span class="sess-log-dot" style="background:${r.isDistract?'var(--c-rest)':catColor(r.catId)}"></span>
+              ${r.isDistract?`⚡ ${tr('distractedLogged')}${r.active?` · ${tr('runningNow')}`:''}`:`${catLabelById(t, r.catId)}${r.active?` · ${tr('runningNow')}`:''}`}
             </span>
-            <span class="sess-log-time" ${r.active?`id="hlive-${t.id}"`:''}>${hm(r.sec)}</span>
+            <span class="sess-log-time" ${(r.isDistract&&r.active)?`id="dlive-${t.id}"`:(r.active?`id="hlive-${t.id}"`:'')}>${r.isDistract?(r.active?hm((now-r.start)/1000):`${new Date(r.start).toLocaleTimeString(LANG==='zh'?'zh-CN':'en-US',{hour:'2-digit',minute:'2-digit'})} · ${hm(r.durationSec)}`):hm(r.sec)}</span>
           </div>`).join('')}
         <div class="sess-log-total">
           <span>${tr('sessionTotal')}</span>
@@ -938,6 +1100,24 @@ function buildCard(t){
           value="${act?.note||''}" oninput="saveNote('${t.id}',this.value)">
       </div>
 
+      <div class="focus-tools">
+        <button class="focus-btn" onclick="markDistracted('${t.id}')">⚡ ${t.distractionActiveStart?tr('returnTask'):tr('distracted')}</button>
+      </div>
+
+      <div class="goalline">
+        <div class="goalline-head">
+          <span class="goalline-title">${tr('dailyGoalTitle')}</span>
+          <span class="goalline-sum">${(t.dailyLine.items||[]).filter(i=>i.done).length}/${(t.dailyLine.items||[]).length} ${tr('dailyGoalDone')}</span>
+        </div>
+        ${(t.dailyLine.items||[]).map(g=>`
+          <div class="goal-item">
+            <input type="checkbox" ${g.done?'checked':''} onchange="toggleDailyGoal('${t.id}','${g.id}')">
+            <span class="goal-text" onclick="editDailyGoal('${t.id}','${g.id}')">${g.text}</span>
+          </div>
+        `).join('')}
+        <button class="goal-add" onclick="addDailyGoal('${t.id}')">＋ ${tr('addGoalItem')}</button>
+      </div>
+
       ${historyHtml}
       ${barHtml}
     </div>`;
@@ -946,6 +1126,10 @@ function buildCard(t){
 
 // ─── TICK ────────────────────────────────────────────────
 function tick(){
+  if(VIEW_DAY!==dayKey()){
+    updateSummary();
+    return;
+  }
   const now=Date.now();
   S.timers.forEach(t=>{
     const totalSecs=Math.max(0,(t.targetTime-now)/1000);
@@ -985,6 +1169,9 @@ function tick(){
       const tracked=t.sessions.reduce((a,x)=>a+(x.end?(x.end-x.start)/1000:0),0);
       if(e(`histtot-${t.id}`)) e(`histtot-${t.id}`).textContent=hm(tracked);
     }
+    if(t.distractionActiveStart && e(`dlive-${t.id}`)){
+      e(`dlive-${t.id}`).textContent=hm((now-t.distractionActiveStart)/1000);
+    }
   });
   updateSummary();
 }
@@ -992,6 +1179,7 @@ function tick(){
 // ─── SESSION ─────────────────────────────────────────────
 function startSess(tid,catId){
   const t=S.timers.find(x=>x.id===tid); if(!t) return;
+  normalizeTimer(t);
   if(t.activeSession){
     const same=t.activeSession.catId===catId;
     t.sessions.push({...t.activeSession,end:Date.now()});
@@ -1003,10 +1191,75 @@ function startSess(tid,catId){
 }
 function stopSess(tid){
   const t=S.timers.find(x=>x.id===tid); if(!t||!t.activeSession) return;
-  t.sessions.push({...t.activeSession,end:Date.now()});
+  const ended={...t.activeSession,end:Date.now()};
+  t.sessions.push(ended);
+  const sprintMin = Number(t.sprintMinutes || 25);
+  const sec = (ended.end-ended.start)/1000;
+  if(ended.catId==='work' && sec >= sprintMin*60){
+    t.rewardCount = (t.rewardCount||0) + 1;
+    navigator.vibrate && navigator.vibrate([120,70,120]);
+    showRewardToast(`${tr('rewardGreat')} · +1`);
+  }
   t.activeSession=null; save();render();
 }
 function saveNote(tid,val){ const t=S.timers.find(x=>x.id===tid); if(t&&t.activeSession) t.activeSession.note=val; }
+
+function markDistracted(tid){
+  const t=S.timers.find(x=>x.id===tid); if(!t) return;
+  normalizeTimer(t);
+  const now=Date.now();
+  if(t.distractionActiveStart){
+    const durationSec=Math.max(1,Math.round((now-t.distractionActiveStart)/1000));
+    t.distractions.unshift({start:t.distractionActiveStart,end:now,durationSec});
+    t.distractionActiveStart=null;
+    navigator.vibrate && navigator.vibrate([40,30,40]);
+    showRewardToast(tr('returnTask'));
+  }else{
+    t.distractionActiveStart=now;
+    navigator.vibrate && navigator.vibrate(30);
+    showRewardToast(tr('distracted'));
+  }
+  if(t.distractions.length>50) t.distractions=t.distractions.slice(0,50);
+  save(); render();
+}
+
+function toggleDailyGoal(tid,gid){
+  const t=S.timers.find(x=>x.id===tid); if(!t) return;
+  normalizeTimer(t);
+  const item=t.dailyLine.items.find(i=>i.id===gid); if(!item) return;
+  item.done=!item.done;
+  if(item.done){
+    navigator.vibrate && navigator.vibrate(45);
+    showRewardToast('✅');
+  }
+  save(); render();
+}
+
+function addDailyGoal(tid){
+  const t=S.timers.find(x=>x.id===tid); if(!t) return;
+  normalizeTimer(t);
+  const txt=prompt(tr('addGoalPrompt'), '');
+  if(txt===null) return;
+  const text=txt.trim();
+  if(!text) return;
+  t.dailyLine.items.push(newGoalItem(text));
+  save(); render();
+}
+
+function editDailyGoal(tid,gid){
+  const t=S.timers.find(x=>x.id===tid); if(!t) return;
+  normalizeTimer(t);
+  const item=t.dailyLine.items.find(i=>i.id===gid); if(!item) return;
+  const txt=prompt(tr('editGoalPrompt'), item.text);
+  if(txt===null) return;
+  const text=txt.trim();
+  if(!text){
+    t.dailyLine.items=t.dailyLine.items.filter(i=>i.id!==gid);
+  }else{
+    item.text=text;
+  }
+  save(); render();
+}
 
 function editDeductTag(tid, ref){
   const t=S.timers.find(x=>x.id===tid); if(!t) return;
@@ -1168,6 +1421,7 @@ function openSheet(){
   document.getElementById('f-ded-name').value='';
   document.getElementById('f-ded-hours').value='';
   document.getElementById('f-goal').value='';
+  document.getElementById('f-dailyline').value='';
   document.getElementById('nudge-tog').classList.remove('on');
   document.getElementById('custom-field').style.display='none';
   document.querySelectorAll('.dur-chip').forEach((c,i)=>c.classList.toggle('sel',i===2));
@@ -1182,13 +1436,19 @@ function createTimer(){
   const nudge=document.getElementById('nudge-tog').classList.contains('on');
   const gr=parseFloat(document.getElementById('f-goal').value);
   const workGoal=isNaN(gr)||gr<=0?null:gr;
+  const goalLineRaw=(document.getElementById('f-dailyline').value||'').trim();
+  const dailyItems=goalLineRaw
+    ? goalLineRaw.split(/[,\n，；;]/).map(x=>x.trim()).filter(Boolean).slice(0,8).map(newGoalItem)
+    : [];
   let targetTime;
   if(fDur==='eod'){ const e=new Date(); e.setHours(23,59,0,0); targetTime=e.getTime(); }
   else if(fDur==='custom'){ if(!cv){alert(tr('pickDateAlert'));return;} targetTime=new Date(cv).getTime(); }
   else targetTime=Date.now()+fDur*3600*1000;
   S.timers.unshift({id:'t_'+Date.now(),name,targetTime,originalSecs:(targetTime-Date.now())/1000,
     deducts:[...fDeds],deductOverrides:{},customDeducts:[...fCustomDeds],
-    sessions:[],activeSession:null,workGoal,nudge,customLabel:tr('other'),catLabels:{},customCats:[],hiddenCatIds:[],createdAt:Date.now()});
+    sessions:[],activeSession:null,workGoal,nudge,sprintMinutes:25,rewardCount:0,distractions:[],
+    dailyLine:{date:dayKey(),items:dailyItems},
+    customLabel:tr('other'),catLabels:{},customCats:[],hiddenCatIds:[],pageDate:VIEW_DAY,distractionActiveStart:null,createdAt:Date.now()});
   save(); document.getElementById('add-overlay').classList.remove('open'); render();
 }
 function bgClose(e,id){ if(e.target.id===id) document.getElementById(id).classList.remove('open'); }
@@ -1207,7 +1467,10 @@ if(S.timers.length===0){
       {catId:'work',start:Date.now()-3000000,end:Date.now()-900000,note:'methodology section'},
     ],
     activeSession:null,workGoal:6,nudge:true,customLabel:LANG==='zh'?'会议':'Meeting',
-    catLabels:{},customCats:[{id:'cc_demo',label:LANG==='zh'?'讨论':'Discussion',color:CUSTOM_COLOR}],hiddenCatIds:[],createdAt:Date.now()-7200000
+    sprintMinutes:25,rewardCount:0,distractions:[],
+    dailyLine:{date:dayKey(),items:[newGoalItem(LANG==='zh'?'写完提纲':'Finish outline'),newGoalItem(LANG==='zh'?'完成500字':'Write 500 words')]},
+    catLabels:{},customCats:[{id:'cc_demo',label:LANG==='zh'?'讨论':'Discussion',color:CUSTOM_COLOR}],hiddenCatIds:[],
+    pageDate:dayKey(),distractionActiveStart:null,createdAt:Date.now()-7200000
   });
   save();
 }
