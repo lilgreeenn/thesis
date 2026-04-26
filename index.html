@@ -146,6 +146,8 @@ body {
 @keyframes fadeUp { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
 .card.reorder-mode { animation: wiggle 0.18s ease-in-out infinite alternate; cursor: grab; touch-action: none; }
 .card.reorder-mode.dragging { opacity: 0.8; }
+.reorder-handle { cursor: default; }
+.card.reorder-mode .reorder-handle { cursor: grab; }
 
 /* Card head */
 .card-head {
@@ -674,6 +676,7 @@ const VIEW_DAY_KEY = 'tt_view_day';
 const FOCUS_MODE_KEY = 'tt_focus_mode';
 const QA_LOG_KEY = 'tt_quick_alarm_log';
 const QA_COLLAPSE_KEY = 'tt_quick_alarm_collapsed';
+const UI_SFX_KEY = 'tt_ui_sfx';
 
 const I18N = {
   en: {
@@ -1064,6 +1067,8 @@ let QA = {endAt:null, ringing:false, loop:null, current:null, history:[]};
 let QA_COLLAPSED = localStorage.getItem(QA_COLLAPSE_KEY) === '1';
 let QA_AUDIO_CTX = null;
 let QA_TIMER_LOOP = null;
+let UI_SFX_ON = localStorage.getItem(UI_SFX_KEY) !== '0';
+let UI_SFX_LAST_AT = 0;
 let ADD_MENU_OPEN = false;
 try{
   const qh = JSON.parse(localStorage.getItem(QA_LOG_KEY)||'[]');
@@ -1144,6 +1149,53 @@ function playAlarmBeep(){
     gain.gain.exponentialRampToValueAtTime(0.001, n+0.26);
     osc.start(n); osc.stop(n+0.28);
   }catch(e){}
+}
+function playUiSfx(kind='tap'){
+  if(!UI_SFX_ON) return;
+  const now = Date.now();
+  const minGap = kind==='complete' ? 120 : 55;
+  // Prevent click storms from becoming noisy on mobile.
+  if(now - UI_SFX_LAST_AT < minGap) return;
+  UI_SFX_LAST_AT = now;
+  try{
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return;
+    if(!QA_AUDIO_CTX) QA_AUDIO_CTX = new Ctx();
+    const ctx = QA_AUDIO_CTX;
+    if(ctx.state === 'suspended') ctx.resume().catch(()=>{});
+    const makeTone = (freq, dur, type='triangle', vol=0.03, when=0)=>{
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.value=0.0001;
+      osc.connect(gain); gain.connect(ctx.destination);
+      const t = ctx.currentTime + when;
+      gain.gain.exponentialRampToValueAtTime(vol, t+0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+      osc.start(t); osc.stop(t+dur+0.01);
+    };
+    if(kind==='longpress'){
+      makeTone(420, 0.11, 'sine', 0.04, 0);
+      return;
+    }
+    if(kind==='complete'){
+      makeTone(720, 0.10, 'triangle', 0.04, 0);
+      makeTone(980, 0.14, 'triangle', 0.045, 0.11);
+      return;
+    }
+    // default tap
+    makeTone(640, 0.07, 'triangle', 0.035, 0);
+  }catch(e){}
+}
+function playUiTap(){ playUiSfx('tap'); }
+function isInteractiveTapTarget(target){
+  if(!target || !target.closest) return false;
+  const el = target.closest('button,.cbtn,.cat-btn,.dchip,.chip-small,.daybar-btn,.daybar-chip,.toggle,.add-btn,.add-circle,.custom-ded-remove,.ded-del-btn');
+  if(!el) return false;
+  if(el.disabled) return false;
+  if(el.dataset && el.dataset.skipClick==='1') return false;
+  return true;
 }
 function ensureAudioUnlocked(){
   const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -1264,23 +1316,38 @@ const getDeductItems = t => {
 };
 const isBaseCat = id => ['work','rest','sleep'].includes(id);
 
-function setupLongPress(el, callback, ms=480){
+function setupLongPress(el, callback, ms=480, moveTolerance=10){
   if(!el || el.dataset.lpBound==='1') return;
   el.dataset.lpBound='1';
   let timer=null, fired=false;
-  let startY=null;
+  let startY=null, startX=null;
   const getY = evt => evt.touches ? evt.touches[0].clientY : evt.clientY;
+  const getX = evt => evt.touches ? evt.touches[0].clientX : evt.clientX;
+  const cancelTimer = ()=>{
+    if(timer) clearTimeout(timer);
+    timer=null;
+  };
   const start=(evt)=>{
     fired=false;
+    cancelTimer();
     startY=getY(evt);
+    startX=getX(evt);
     timer=setTimeout(()=>{
       fired=true;
+      playUiSfx('longpress');
       callback();
     },ms);
   };
+  const move=(evt)=>{
+    if(!timer || fired || startY===null || startX===null) return;
+    const dx=Math.abs((getX(evt) ?? startX)-startX);
+    const dy=Math.abs((getY(evt) ?? startY)-startY);
+    if(dx>moveTolerance || dy>moveTolerance){
+      cancelTimer();
+    }
+  };
   const end=(e)=>{
-    if(timer) clearTimeout(timer);
-    timer=null;
+    cancelTimer();
     if(fired){
       e.preventDefault();
       e.stopPropagation();
@@ -1295,10 +1362,12 @@ function setupLongPress(el, callback, ms=480){
         }
       }
     }
-    startY=null;
+    startY=null; startX=null;
   };
   el.addEventListener('mousedown', start);
   el.addEventListener('touchstart', start, {passive:true});
+  el.addEventListener('mousemove', move);
+  el.addEventListener('touchmove', move, {passive:true});
   el.addEventListener('mouseup', end);
   el.addEventListener('mouseleave', end);
   el.addEventListener('touchend', end);
@@ -1373,9 +1442,14 @@ function render(){
 }
 
 function bindLongPressInteractive(){
-  document.querySelectorAll('.card').forEach(el=>{
-    setupLongPress(el, ()=>toggleCardReorderMode(el.dataset.id));
-    setupCardDragGesture(el);
+  document.querySelectorAll('.card').forEach(card=>{
+    setupCardDragGesture(card);
+  });
+  document.querySelectorAll('.reorder-handle').forEach(handle=>{
+    setupLongPress(handle, ()=>{
+      const card = handle.closest('.card');
+      if(card) toggleCardReorderMode(card.dataset.id);
+    }, 700, 8);
   });
   document.querySelectorAll('.lp-ded').forEach(el=>{
     setupLongPress(el, ()=>toggleDeductDeleteMode(el.dataset.tid));
@@ -1472,7 +1546,7 @@ function buildCard(t){
         <button class="del-no" onclick="cancelDel('${t.id}')">${tr('cancel')}</button>
       </div>
       <div class="card-head">
-        <div style="flex:1;min-width:0">
+        <div class="reorder-handle" style="flex:1;min-width:0">
           <div class="card-name">${t.name}</div>
           <div class="card-meta"><span class="card-ends">${tr('stopwatch')}</span></div>
         </div>
@@ -1587,7 +1661,7 @@ function buildCard(t){
     </div>
 
     <div class="card-head">
-      <div style="flex:1;min-width:0">
+      <div class="reorder-handle" style="flex:1;min-width:0">
         <div class="card-name">${t.name}</div>
         <div class="card-meta">
           <span class="card-ends">${tr('endsArrow')} ${new Date(t.targetTime).toLocaleDateString(LANG === 'zh' ? 'zh-CN' : 'en-US',{month:'short',day:'numeric'})} ${new Date(t.targetTime).toLocaleTimeString(LANG === 'zh' ? 'zh-CN' : 'en-US',{hour:'2-digit',minute:'2-digit'})}</span>
@@ -1762,6 +1836,7 @@ function stopSess(tid){
   if(ended.catId==='work' && sec >= sprintMin*60){
     t.rewardCount = (t.rewardCount||0) + 1;
     navigator.vibrate && navigator.vibrate([120,70,120]);
+    playUiSfx('complete');
     showRewardToast(`${tr('rewardGreat')} · +1`);
   }
   t.activeSession=null; save();render();
@@ -1809,6 +1884,7 @@ function toggleDailyGoal(tid,gid){
   item.doneAt=item.done?Date.now():null;
   if(item.done){
     navigator.vibrate && navigator.vibrate(45);
+    playUiSfx('complete');
     showRewardToast('✅');
   }
   save(); render();
@@ -2102,6 +2178,9 @@ try{ render(); }catch(e){ console.error('render failed', e); }
 try{ clockTick(); }catch(e){ console.error('clockTick failed', e); }
 document.addEventListener('touchstart', ensureAudioUnlocked, {passive:true});
 document.addEventListener('click', ensureAudioUnlocked, true);
+document.addEventListener('click', (e)=>{
+  if(isInteractiveTapTarget(e.target)) playUiTap();
+}, true);
 setInterval(()=>{
   try{ clockTick(); }catch(e){}
   try{ tick(); }catch(e){}
