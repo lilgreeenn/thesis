@@ -206,6 +206,21 @@ body {
 .sbar-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
 .sbar-l { font-size: 10px; color: var(--text3); }
 .sbar-v { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text2); }
+.sess-log {
+  margin-top: 8px; border-top: 1px dashed var(--border);
+  padding-top: 7px; display: flex; flex-direction: column; gap: 4px;
+}
+.sess-log-row {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11px; color: var(--text2);
+}
+.sess-log-name { display: inline-flex; align-items: center; gap: 5px; }
+.sess-log-dot { width: 5px; height: 5px; border-radius: 50%; }
+.sess-log-time { font-family: 'DM Mono', monospace; color: var(--text); }
+.sess-log-total {
+  margin-top: 2px; padding-top: 6px; border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; font-size: 11px; color: var(--text2);
+}
 
 /* Nudge badge */
 .nudge-badge {
@@ -499,6 +514,16 @@ const I18N = {
     addDeduct: 'Add',
     customDeductHoursPlaceholder: '1.5h',
     customDeductHoursAlert: 'Please enter valid deduction hours.',
+    longPressHint: 'Long press to edit',
+    editLabelPrompt: 'Edit label',
+    editHoursPrompt: 'Edit hours',
+    addSessionTag: 'Add tag',
+    addSessionTagPrompt: 'New session tag name',
+    deleteTagConfirm: 'Delete this tag?',
+    deleteDeductConfirm: 'Delete this deduction tag?',
+    sessionHistory: 'Action History',
+    sessionTotal: 'Total',
+    runningNow: 'Running',
     workGoalOptional: 'Work goal (optional)',
     goalPlaceholder: 'e.g. 4',
     focusedWork: 'h focused work',
@@ -544,6 +569,16 @@ const I18N = {
     addDeduct: '添加',
     customDeductHoursPlaceholder: '1.5小时',
     customDeductHoursAlert: '请输入有效的扣除小时数。',
+    longPressHint: '长按可编辑',
+    editLabelPrompt: '编辑名称',
+    editHoursPrompt: '编辑小时',
+    addSessionTag: '添加标签',
+    addSessionTagPrompt: '新会话标签名称',
+    deleteTagConfirm: '删除这个标签吗？',
+    deleteDeductConfirm: '删除这个扣除标签吗？',
+    sessionHistory: '动作历史',
+    sessionTotal: '总和',
+    runningNow: '进行中',
     workGoalOptional: '学习目标（可选）',
     goalPlaceholder: '例如 4',
     focusedWork: '小时专注学习',
@@ -590,10 +625,23 @@ const dedLabel = {
 const getDedLabel = id => (dedLabel[id] && dedLabel[id][LANG]) || (dedLabel[id] && dedLabel[id].en) || id;
 
 const catColor = id => id==='work'?'#1a1815':id==='rest'?'#8b6f5e':id==='sleep'?'#5c7a8b':CUSTOM_COLOR;
-const allCats  = t => [
-  ...BASE_CATS.map(c => ({...c, label: tr(c.id)})),
-  {id:'custom', label:t.customLabel||tr('other'), color:CUSTOM_COLOR}
-];
+const allCats  = t => {
+  const hidden = new Set(t.hiddenCatIds || []);
+  const labels = t.catLabels || {};
+  const base = BASE_CATS.filter(c=>!hidden.has(c.id)).map(c => ({...c, label: labels[c.id] || tr(c.id)}));
+  const customCats = (t.customCats && t.customCats.length)
+    ? t.customCats.filter(c=>!hidden.has(c.id)).map(c => ({id:c.id, label:c.label || tr('other'), color:c.color || CUSTOM_COLOR}))
+    : (hidden.has('custom') ? [] : [{id:'custom', label:t.customLabel||tr('other'), color:CUSTOM_COLOR}]);
+  return [...base, ...customCats];
+};
+
+const catLabelById = (t, catId) => {
+  const labels = t.catLabels || {};
+  const custom = (t.customCats || []).find(c=>c.id===catId);
+  if(custom) return custom.label || tr('other');
+  if(catId==='custom') return t.customLabel || tr('other');
+  return labels[catId] || (BASE_CATS.find(c=>c.id===catId)?.label ? tr(catId) : tr('other'));
+};
 
 function applyTranslations() {
   document.documentElement.lang = LANG === 'zh' ? 'zh-CN' : 'en';
@@ -654,6 +702,57 @@ const totalTracked = t => {
 const dedPresetSecs = t => (t.deducts||[]).reduce((s,d)=>{const o=DEDUCTS.find(x=>x.id===d);return s+(o?o.hours*3600:0);},0);
 const dedCustomSecs = t => (t.customDeducts||[]).reduce((s,d)=>s+((Number(d.hours)||0)*3600),0);
 const dedTotalSecs = t => dedPresetSecs(t)+dedCustomSecs(t);
+const getDeductItems = t => {
+  const preset = (t.deducts || []).map(id => {
+    const o = DEDUCTS.find(x=>x.id===id);
+    if(!o) return null;
+    const override = t.deductOverrides && t.deductOverrides[id];
+    const label = override?.label || getDedLabel(id);
+    const hours = Number(override?.hours ?? o.hours) || 0;
+    return {ref:`p:${id}`, label, hours, color:catColor(o.cat)};
+  }).filter(Boolean);
+  const custom = (t.customDeducts || []).map((d,idx)=>{
+    const hours = Number(d.hours) || 0;
+    return {ref:`c:${idx}`, label:(d.label || tr('custom')).trim(), hours, color:CUSTOM_COLOR};
+  }).filter(x=>x.hours>0);
+  return [...preset, ...custom];
+};
+const isBaseCat = id => ['work','rest','sleep'].includes(id);
+
+function setupLongPress(el, callback, ms=480){
+  if(!el || el.dataset.lpBound==='1') return;
+  el.dataset.lpBound='1';
+  let timer=null, fired=false;
+  const start=()=>{
+    fired=false;
+    timer=setTimeout(()=>{
+      fired=true;
+      callback();
+    },ms);
+  };
+  const end=(e)=>{
+    if(timer) clearTimeout(timer);
+    timer=null;
+    if(fired){
+      e.preventDefault();
+      e.stopPropagation();
+      el.dataset.skipClick='1';
+      setTimeout(()=>{ el.dataset.skipClick='0'; }, 0);
+    }
+  };
+  el.addEventListener('mousedown', start);
+  el.addEventListener('touchstart', start, {passive:true});
+  el.addEventListener('mouseup', end);
+  el.addEventListener('mouseleave', end);
+  el.addEventListener('touchend', end);
+  el.addEventListener('touchcancel', end);
+  el.addEventListener('click', (e)=>{
+    if(el.dataset.skipClick==='1'){
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
+}
 
 // ─── CLOCK ──────────────────────────────────────────────
 function clockTick(){
@@ -700,7 +799,17 @@ function render(){
   document.getElementById('empty-state').style.display=S.timers.length?'none':'';
   Array.from(wrap.querySelectorAll('.card')).forEach(c=>c.remove());
   S.timers.forEach(t=>wrap.appendChild(buildCard(t)));
+  bindLongPressInteractive();
   updateSummary();
+}
+
+function bindLongPressInteractive(){
+  document.querySelectorAll('.lp-ded').forEach(el=>{
+    setupLongPress(el, ()=>editDeductTag(el.dataset.tid, el.dataset.ref));
+  });
+  document.querySelectorAll('.lp-cat').forEach(el=>{
+    setupLongPress(el, ()=>editSessionTag(el.dataset.tid, el.dataset.cid));
+  });
 }
 
 function buildCard(t){
@@ -717,15 +826,11 @@ function buildCard(t){
   const tracked=totalTracked(t);
 
   // deduct chips
-  const dHtml=t.deducts.map(d=>{
-    const o=DEDUCTS.find(x=>x.id===d); if(!o) return '';
-    return `<div class="chip-small"><div class="chip-dot" style="background:${catColor(o.cat)}"></div>${getDedLabel(o.id)}</div>`;
-  }).join('') + (t.customDeducts||[]).map(d=>{
-    const label = (d.label||tr('custom')).trim();
-    const hours = Number(d.hours)||0;
-    if(hours<=0) return '';
-    return `<div class="chip-small"><div class="chip-dot" style="background:${CUSTOM_COLOR}"></div>${label} ${hours}h</div>`;
-  }).join('');
+  const dHtml=getDeductItems(t).map(d=>
+    `<div class="chip-small lp-ded" data-tid="${t.id}" data-ref="${d.ref}" title="${tr('longPressHint')}">
+      <div class="chip-dot" style="background:${d.color}"></div>${d.label} ${d.hours}h
+    </div>`
+  ).join('');
 
   // session bar segs
   const segs=cats.map(c=>{
@@ -737,6 +842,28 @@ function buildCard(t){
     <div class="sbar">${segs.map(x=>`<div class="sbar-seg" style="width:${Math.min(100,x.secs/t.originalSecs*100)}%;background:${x.cat.color};opacity:0.6"></div>`).join('')}</div>
     <div class="sbar-stats">${segs.map(x=>`<div class="sbar-stat"><div class="sbar-dot" style="background:${x.cat.color}"></div><span class="sbar-l">${x.cat.label}</span><span class="sbar-v">${hm(x.secs)}</span></div>`).join('')}</div>`
     :`<div style="font-size:10px;color:var(--text3)">${tr('tapCategory')}</div>`;
+
+  const historyRows = [
+    ...(act ? [{catId:act.catId, sec:(now-act.start)/1000, active:true}] : []),
+    ...[...t.sessions].slice(-8).reverse().map(s=>({catId:s.catId, sec:(s.end-s.start)/1000, active:false}))
+  ];
+  const historyHtml = historyRows.length
+    ? `<div class="sess-log">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;">${tr('sessionHistory')}</div>
+        ${historyRows.map((r,idx)=>`
+          <div class="sess-log-row">
+            <span class="sess-log-name">
+              <span class="sess-log-dot" style="background:${catColor(r.catId)}"></span>
+              ${catLabelById(t, r.catId)}${r.active?` · ${tr('runningNow')}`:''}
+            </span>
+            <span class="sess-log-time" ${r.active?`id="hlive-${t.id}"`:''}>${hm(r.sec)}</span>
+          </div>`).join('')}
+        <div class="sess-log-total">
+          <span>${tr('sessionTotal')}</span>
+          <span class="sess-log-time" id="histtot-${t.id}">${hm(tracked)}</span>
+        </div>
+      </div>`
+    : '';
 
   const div=document.createElement('div');
   div.className='card'; div.dataset.id=t.id;
@@ -788,16 +915,13 @@ function buildCard(t){
 
       <div class="cat-row">
         ${cats.map(c=>`
-          <button class="cat-btn ${act?.catId===c.id?'running':''}" style="--cc:${c.color}"
+          <button class="cat-btn lp-cat ${act?.catId===c.id?'running':''}" style="--cc:${c.color}"
+            data-tid="${t.id}" data-cid="${c.id}" title="${tr('longPressHint')}"
             onclick="startSess('${t.id}','${c.id}')">
             <div class="cat-dot"></div>
-            ${c.id==='custom'
-              ?`<input class="cat-name-input" id="cl-${t.id}" value="${t.customLabel||tr('other')}"
-                  onclick="event.stopPropagation()"
-                  onblur="saveLabel('${t.id}',this.value)"
-                  onkeydown="if(event.key==='Enter')this.blur()">`
-              :c.label}
+            ${c.label}
           </button>`).join('')}
+        <button class="cat-btn" style="--cc:${CUSTOM_COLOR}" onclick="addSessionTag('${t.id}')">＋ ${tr('addSessionTag')}</button>
         <span class="nudge-badge" id="nb-${t.id}">${tr('restOver30m')}</span>
       </div>
 
@@ -814,6 +938,7 @@ function buildCard(t){
           value="${act?.note||''}" oninput="saveNote('${t.id}',this.value)">
       </div>
 
+      ${historyHtml}
       ${barHtml}
     </div>`;
   return div;
@@ -836,10 +961,12 @@ function tick(){
     if(t.activeSession){
       const el=(now-t.activeSession.start)/1000;
       if(e(`at-${t.id}`)) e(`at-${t.id}`).textContent=hms(el);
+      if(e(`hlive-${t.id}`)) e(`hlive-${t.id}`).textContent=hm(el);
 
       // tracked total
       const tracked=t.sessions.reduce((a,x)=>a+(x.end?(x.end-x.start)/1000:0),0)+el;
       if(e(`stot-${t.id}`)) e(`stot-${t.id}`).textContent=`${hm(tracked)} ${tr('tracked')}`;
+      if(e(`histtot-${t.id}`)) e(`histtot-${t.id}`).textContent=hm(tracked);
 
       // work goal bar
       if(t.workGoal && e(`gf-${t.id}`)){
@@ -853,6 +980,10 @@ function tick(){
         const nb=e(`nb-${t.id}`);
         if(nb){nb.classList.add('show');setTimeout(()=>nb.classList.remove('show'),4000);}
       }
+    }
+    else{
+      const tracked=t.sessions.reduce((a,x)=>a+(x.end?(x.end-x.start)/1000:0),0);
+      if(e(`histtot-${t.id}`)) e(`histtot-${t.id}`).textContent=hm(tracked);
     }
   });
   updateSummary();
@@ -876,7 +1007,98 @@ function stopSess(tid){
   t.activeSession=null; save();render();
 }
 function saveNote(tid,val){ const t=S.timers.find(x=>x.id===tid); if(t&&t.activeSession) t.activeSession.note=val; }
-function saveLabel(tid,val){ const t=S.timers.find(x=>x.id===tid); if(t){t.customLabel=val.trim()||tr('other');save();} }
+
+function editDeductTag(tid, ref){
+  const t=S.timers.find(x=>x.id===tid); if(!t) return;
+  if(confirm(tr('deleteDeductConfirm'))){
+    if(ref.startsWith('p:')){
+      const id=ref.slice(2);
+      t.deducts=(t.deducts||[]).filter(x=>x!==id);
+      if(t.deductOverrides) delete t.deductOverrides[id];
+    }else if(ref.startsWith('c:')){
+      const idx=parseInt(ref.slice(2),10);
+      t.customDeducts=(t.customDeducts||[]).filter((_,i)=>i!==idx);
+    }
+    save(); render(); return;
+  }
+  let curLabel='', curHours=0;
+  if(ref.startsWith('p:')){
+    const id=ref.slice(2);
+    const base=DEDUCTS.find(x=>x.id===id); if(!base) return;
+    const ov=t.deductOverrides && t.deductOverrides[id];
+    curLabel=ov?.label || getDedLabel(id);
+    curHours=Number(ov?.hours ?? base.hours) || base.hours;
+    const label=prompt(tr('editLabelPrompt'), curLabel);
+    if(label===null) return;
+    const hv=prompt(tr('editHoursPrompt'), String(curHours));
+    if(hv===null) return;
+    const hours=parseFloat(hv);
+    if(isNaN(hours) || hours<=0) return;
+    if(!t.deductOverrides) t.deductOverrides={};
+    t.deductOverrides[id]={label:label.trim()||curLabel,hours:Math.round(hours*10)/10};
+  } else if(ref.startsWith('c:')){
+    const idx=parseInt(ref.slice(2),10);
+    const item=t.customDeducts && t.customDeducts[idx];
+    if(!item) return;
+    curLabel=item.label || tr('custom');
+    curHours=Number(item.hours) || 1;
+    const label=prompt(tr('editLabelPrompt'), curLabel);
+    if(label===null) return;
+    const hv=prompt(tr('editHoursPrompt'), String(curHours));
+    if(hv===null) return;
+    const hours=parseFloat(hv);
+    if(isNaN(hours) || hours<=0) return;
+    item.label=(label.trim()||curLabel);
+    item.hours=Math.round(hours*10)/10;
+  }
+  save(); render();
+}
+
+function addSessionTag(tid){
+  const t=S.timers.find(x=>x.id===tid); if(!t) return;
+  const name=prompt(tr('addSessionTagPrompt'), tr('other'));
+  if(name===null) return;
+  const label=name.trim();
+  if(!label) return;
+  if(!t.customCats) t.customCats=[];
+  t.customCats.push({id:`cc_${Date.now()}_${Math.floor(Math.random()*999)}`,label,color:CUSTOM_COLOR});
+  save(); render();
+}
+
+function editSessionTag(tid, catId){
+  const t=S.timers.find(x=>x.id===tid); if(!t) return;
+  if(confirm(tr('deleteTagConfirm'))){
+    if(!t.hiddenCatIds) t.hiddenCatIds=[];
+    if(!t.hiddenCatIds.includes(catId)) t.hiddenCatIds.push(catId);
+    if(!isBaseCat(catId)){
+      t.customCats=(t.customCats||[]).filter(c=>c.id!==catId);
+    }
+    if(t.activeSession?.catId===catId) t.activeSession=null;
+    save(); render(); return;
+  }
+  const cats=allCats(t);
+  const cur=cats.find(c=>c.id===catId); if(!cur) return;
+  const next=prompt(tr('editLabelPrompt'), cur.label);
+  if(next===null) return;
+  const label=next.trim();
+  if(!label){
+    if(!isBaseCat(catId) && confirm(tr('deleteTagConfirm'))){
+      t.customCats=(t.customCats||[]).filter(c=>c.id!==catId);
+      if(t.activeSession?.catId===catId) t.activeSession=null;
+      save(); render();
+    }
+    return;
+  }
+  if(isBaseCat(catId)){
+    if(!t.catLabels) t.catLabels={};
+    t.catLabels[catId]=label;
+  }else{
+    if(!t.customCats) t.customCats=[];
+    const target=t.customCats.find(c=>c.id===catId);
+    if(target) target.label=label;
+  }
+  save(); render();
+}
 
 // ─── DELETE ──────────────────────────────────────────────
 function askDel(id){ document.getElementById(`del-${id}`).classList.add('show'); setTimeout(()=>cancelDel(id),4000); }
@@ -902,6 +1124,16 @@ function buildDedRow(){
       else{ if(o.id.startsWith('s')) fDeds=fDeds.filter(x=>!x.startsWith('s')); fDeds.push(o.id); }
       buildDedRow();
     };
+    setupLongPress(d, ()=>{
+      const label = prompt(tr('editLabelPrompt'), getDedLabel(o.id));
+      if(label===null) return;
+      const hv = prompt(tr('editHoursPrompt'), String(o.hours));
+      if(hv===null) return;
+      const hours = parseFloat(hv);
+      if(isNaN(hours)||hours<=0) return;
+      fCustomDeds.push({label:(label.trim()||getDedLabel(o.id)),hours:Math.round(hours*10)/10});
+      renderCustomDedDraft();
+    });
     w.appendChild(d);
   });
 }
@@ -955,7 +1187,8 @@ function createTimer(){
   else if(fDur==='custom'){ if(!cv){alert(tr('pickDateAlert'));return;} targetTime=new Date(cv).getTime(); }
   else targetTime=Date.now()+fDur*3600*1000;
   S.timers.unshift({id:'t_'+Date.now(),name,targetTime,originalSecs:(targetTime-Date.now())/1000,
-    deducts:[...fDeds],customDeducts:[...fCustomDeds],sessions:[],activeSession:null,workGoal,nudge,customLabel:tr('other'),createdAt:Date.now()});
+    deducts:[...fDeds],deductOverrides:{},customDeducts:[...fCustomDeds],
+    sessions:[],activeSession:null,workGoal,nudge,customLabel:tr('other'),catLabels:{},customCats:[],hiddenCatIds:[],createdAt:Date.now()});
   save(); document.getElementById('add-overlay').classList.remove('open'); render();
 }
 function bgClose(e,id){ if(e.target.id===id) document.getElementById(id).classList.remove('open'); }
@@ -966,13 +1199,15 @@ if(S.timers.length===0){
     id:'t_demo',name:tr('demoName'),
     targetTime:Date.now()+48*3600*1000,originalSecs:48*3600,
     deducts:['s8','m'],
+    deductOverrides:{},
     customDeducts:[{label:LANG==='zh'?'通话':'Call',hours:0.5}],
     sessions:[
       {catId:'work',start:Date.now()-5400000,end:Date.now()-3600000,note:'lit review outline'},
       {catId:'rest',start:Date.now()-3600000,end:Date.now()-3000000,note:''},
       {catId:'work',start:Date.now()-3000000,end:Date.now()-900000,note:'methodology section'},
     ],
-    activeSession:null,workGoal:6,nudge:true,customLabel:LANG==='zh'?'会议':'Meeting',createdAt:Date.now()-7200000
+    activeSession:null,workGoal:6,nudge:true,customLabel:LANG==='zh'?'会议':'Meeting',
+    catLabels:{},customCats:[{id:'cc_demo',label:LANG==='zh'?'讨论':'Discussion',color:CUSTOM_COLOR}],hiddenCatIds:[],createdAt:Date.now()-7200000
   });
   save();
 }
