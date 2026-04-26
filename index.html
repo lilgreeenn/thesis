@@ -91,6 +91,35 @@ body {
 .sum-spacer { flex: 1; }
 .sum-goal { font-family: 'DM Mono', monospace; font-size: 11px; }
 .sum-goal-lbl { font-size: 9px; color: var(--text3); margin-right: 4px; }
+.quick-alarm {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 22px 12px;
+}
+.qa-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.qa-title { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.09em; }
+.qa-time { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text); }
+.qa-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.qa-btn {
+  border: 1px solid var(--border); background: var(--bg); color: var(--text2);
+  border-radius: 999px; padding: 5px 10px; font-size: 11px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+.qa-btn:active { background: var(--border); }
+.qa-inp {
+  width: 74px; border: 1px solid var(--border); background: transparent;
+  border-radius: 999px; padding: 5px 10px; font-size: 11px; color: var(--text2);
+  font-family: 'DM Mono', monospace;
+}
+.qa-stop {
+  border: 1px solid var(--border2); background: transparent; color: var(--text2);
+  border-radius: 999px; padding: 5px 10px; font-size: 11px; cursor: pointer;
+}
+.qa-stop.ring { border-color: var(--c-rest); color: var(--c-rest); animation: blink 0.9s ease-in-out infinite; }
+.qa-log { margin-top: 8px; border-top: 1px dashed var(--border); padding-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.qa-log-title { font-size: 9px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; }
+.qa-log-row { display: flex; justify-content: space-between; gap: 8px; font-size: 10px; color: var(--text2); }
+.qa-log-row .time { font-family: 'DM Mono', monospace; color: var(--text); }
 
 /* ── CARDS ── */
 .events { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
@@ -329,6 +358,19 @@ body {
   transition: opacity 0.15s; pointer-events: all;
 }
 .add-btn:active { opacity: 0.75; }
+.add-menu {
+  max-width: 480px; margin: 0 auto 10px; display: flex; justify-content: center; gap: 14px;
+  pointer-events: all; opacity: 0; transform: translateY(8px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.add-menu.show { opacity: 1; transform: translateY(0); }
+.add-circle {
+  width: 74px; height: 74px; border-radius: 50%;
+  border: none; background: var(--text); color: var(--bg);
+  font-size: 11px; line-height: 1.2; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; display: flex; align-items: center; justify-content: center; text-align: center;
+}
+.add-circle:active { opacity: 0.82; }
 
 /* ── SHEET ── */
 .overlay {
@@ -481,6 +523,25 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
   <span class="sum-goal" id="s-goal" style="color:var(--text2)">—</span>
 </div>
 
+<div class="quick-alarm">
+  <div class="qa-top">
+    <span class="qa-title" id="qa-title">Quick Alarm</span>
+    <span class="qa-time" id="qa-time">--:--</span>
+  </div>
+  <div class="qa-row">
+    <button class="qa-btn" onclick="startQuickAlarm(5)">5m</button>
+    <button class="qa-btn" onclick="startQuickAlarm(10)">10m</button>
+    <button class="qa-btn" onclick="startQuickAlarm(15)">15m</button>
+    <input class="qa-inp" id="qa-custom" type="number" min="1" max="180" step="1" placeholder="20m">
+    <button class="qa-btn" id="qa-start-btn" onclick="startQuickAlarmCustom()">Start</button>
+    <button class="qa-stop" id="qa-stop-btn" onclick="stopQuickAlarm()">Stop</button>
+  </div>
+  <div class="qa-log">
+    <div class="qa-log-title" id="qa-log-title">Alarm records</div>
+    <div id="qa-log-list"></div>
+  </div>
+</div>
+
 <div class="events" id="events-wrap">
   <div class="empty" id="empty-state">
     <div class="empty-icon">◎</div>
@@ -491,7 +552,11 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
 
 <div class="bottom-fab">
   <div class="app">
-    <button class="add-btn" id="add-btn" onclick="openSheet()">＋ &nbsp; New Timer</button>
+    <div class="add-menu" id="add-menu">
+      <button class="add-circle" id="add-countdown-btn" onclick="openSheet()">倒计时</button>
+      <button class="add-circle" id="add-stopwatch-btn" onclick="openStopwatchSheet()">计时</button>
+    </div>
+    <button class="add-btn" id="add-btn" onclick="toggleAddMenu()">＋ &nbsp; New Timer</button>
   </div>
 </div>
 
@@ -563,6 +628,17 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
     <button class="submit-btn" id="submit-btn" onclick="createTimer()">Create Timer</button>
   </div>
 </div>
+<div class="overlay" id="sw-overlay" onclick="bgClose(event,'sw-overlay')">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="sw-sheet-title">New Stopwatch</div>
+    <div class="field">
+      <label id="sw-name-label">Name</label>
+      <input class="inp" id="sw-name" placeholder="Reading · Practice · Warmup…" maxlength="30">
+    </div>
+    <button class="submit-btn" id="sw-submit-btn" onclick="createStopwatch()">Create Stopwatch</button>
+  </div>
+</div>
 <div class="reward-toast" id="reward-toast"></div>
 
 <script>
@@ -577,6 +653,7 @@ const LANG_KEY = 'tt_lang';
 let LANG = localStorage.getItem(LANG_KEY) || (document.documentElement.lang.startsWith('zh') ? 'zh' : 'en');
 const VIEW_DAY_KEY = 'tt_view_day';
 const FOCUS_MODE_KEY = 'tt_focus_mode';
+const QA_LOG_KEY = 'tt_quick_alarm_log';
 
 const I18N = {
   en: {
@@ -588,9 +665,20 @@ const I18N = {
     noTimers: 'No timers yet.<br>Add one below.',
     noTimersOnDay: 'No timers on this day.<br>Tap below to create one.',
     newTimer: 'New Timer',
+    newStopwatch: 'New Stopwatch',
+    stopwatch: 'Stopwatch',
+    countdown: 'Countdown',
     viewingDay: 'Day',
     today: 'Today',
     focusMode: 'Only current',
+    quickAlarm: 'Quick Alarm',
+    alarmStart: 'Start',
+    alarmStop: 'Stop',
+    alarmCustomPlaceholder: '20m',
+    alarmDone: 'Time is up!',
+    alarmRecords: 'Alarm records',
+    alarmStatusDone: 'done',
+    alarmStatusStopped: 'stopped',
     name: 'Name',
     namePlaceholder: 'Chapter 3 · Defense · Revisions…',
     duration: 'Duration',
@@ -624,6 +712,7 @@ const I18N = {
     restNudge: 'Rest nudge',
     vibrateNudge: 'Vibrate after 30 min resting',
     createTimer: 'Create Timer',
+    createStopwatch: 'Create Stopwatch',
     distracted: 'Distracted',
     returnTask: 'Back to task',
     distractedLogged: 'Logged',
@@ -651,6 +740,8 @@ const I18N = {
     tapCategory: 'Tap a category to start tracking →',
     restOver30m: 'rest > 30m !',
     stop: 'Stop',
+    start: 'Start',
+    elapsed: 'elapsed',
     quickNote: 'quick note…',
     pickDateAlert: 'Please pick a date.',
     demoName: 'Thesis Final Draft'
@@ -664,9 +755,20 @@ const I18N = {
     noTimers: '还没有计时器。<br>点下方按钮新建。',
     noTimersOnDay: '这一天还没有计时器。<br>点下方按钮新建。',
     newTimer: '新建计时器',
+    newStopwatch: '新建计时',
+    stopwatch: '计时',
+    countdown: '倒计时',
     viewingDay: '日期',
     today: '今天',
     focusMode: '只看当前',
+    quickAlarm: '快速闹钟',
+    alarmStart: '开始',
+    alarmStop: '停止',
+    alarmCustomPlaceholder: '20分',
+    alarmDone: '时间到！',
+    alarmRecords: '闹钟记录',
+    alarmStatusDone: '到点',
+    alarmStatusStopped: '手动停止',
     name: '名称',
     namePlaceholder: '第3章 · 答辩 · 修改…',
     duration: '时长',
@@ -700,6 +802,7 @@ const I18N = {
     restNudge: '休息提醒',
     vibrateNudge: '连续休息 30 分钟后震动提醒',
     createTimer: '创建计时器',
+    createStopwatch: '创建计时',
     distracted: '走神一下',
     returnTask: '回到任务',
     distractedLogged: '已记录',
@@ -727,6 +830,8 @@ const I18N = {
     tapCategory: '点击类别开始记录 →',
     restOver30m: '休息超 30 分钟！',
     stop: '停止',
+    start: '开始',
+    elapsed: '已计时',
     quickNote: '快速备注…',
     pickDateAlert: '请先选择日期。',
     demoName: '论文终稿冲刺'
@@ -781,7 +886,13 @@ function applyTranslations() {
   document.getElementById('lbl-goal').textContent = tr('goal');
   document.getElementById('empty-text').innerHTML = tr('noTimers');
   document.getElementById('add-btn').innerHTML = `＋ &nbsp; ${tr('newTimer')}`;
+  document.getElementById('add-countdown-btn').textContent = tr('countdown');
+  document.getElementById('add-stopwatch-btn').textContent = tr('stopwatch');
   document.getElementById('sheet-title').textContent = tr('newTimer');
+  document.getElementById('sw-sheet-title').textContent = tr('newStopwatch');
+  document.getElementById('sw-name-label').textContent = tr('name');
+  document.getElementById('sw-name').placeholder = LANG==='zh' ? '阅读 · 练习 · 热身…' : 'Reading · Practice · Warmup…';
+  document.getElementById('sw-submit-btn').textContent = tr('createStopwatch');
   document.getElementById('f-name-label').textContent = tr('name');
   document.getElementById('f-name').placeholder = tr('namePlaceholder');
   document.getElementById('f-duration-label').textContent = tr('duration');
@@ -805,8 +916,19 @@ function applyTranslations() {
   document.getElementById('day-next').textContent = '->';
   document.getElementById('focus-chip').textContent = tr('focusMode');
   document.getElementById('focus-chip').classList.toggle('on', FOCUS_MODE);
+  document.getElementById('qa-title').textContent = tr('quickAlarm');
+  document.getElementById('qa-start-btn').textContent = tr('alarmStart');
+  document.getElementById('qa-stop-btn').textContent = tr('alarmStop');
+  document.getElementById('qa-custom').placeholder = tr('alarmCustomPlaceholder');
+  document.getElementById('qa-log-title').textContent = tr('alarmRecords');
   renderCustomDedDraft();
   updateDayLabel();
+  updateQuickAlarmUI();
+}
+
+function toggleAddMenu(){
+  ADD_MENU_OPEN = !ADD_MENU_OPEN;
+  document.getElementById('add-menu').classList.toggle('show', ADD_MENU_OPEN);
 }
 
 function toggleLang() {
@@ -876,7 +998,7 @@ const shiftDayKey = (key, delta) => {
 const compareDayKey = (a,b) => a===b ? 0 : (a>b ? 1 : -1);
 const timerVisibleOnDay = (t, key) => {
   const start = t.createdAt || Date.now();
-  const end = t.targetTime;
+  const end = t.mode==='countup' ? Number.MAX_SAFE_INTEGER : t.targetTime;
   const ds = dayStartMs(key);
   const de = dayEndMs(key);
   return end > ds && start < de;
@@ -892,7 +1014,14 @@ const fmtDayLabel = key => new Date(`${key}T00:00:00`).toLocaleDateString(LANG==
 const newGoalItem = text => ({id:`g_${Date.now()}_${Math.floor(Math.random()*999)}`, text, done:false, doneAt:null});
 let VIEW_DAY = localStorage.getItem(VIEW_DAY_KEY) || dayKey();
 let FOCUS_MODE = localStorage.getItem(FOCUS_MODE_KEY) === '1';
+let QA = {endAt:null, ringing:false, loop:null, current:null, history:[]};
+let ADD_MENU_OPEN = false;
+try{
+  const qh = JSON.parse(localStorage.getItem(QA_LOG_KEY)||'[]');
+  if(Array.isArray(qh)) QA.history = qh;
+}catch(e){}
 function normalizeTimer(t){
+  if(!t.mode) t.mode='countdown';
   if(!t.customDeducts) t.customDeducts=[];
   if(!t.customCats) t.customCats=[];
   if(!t.catLabels) t.catLabels={};
@@ -903,6 +1032,9 @@ function normalizeTimer(t){
   if(!t.distractionActiveReason) t.distractionActiveReason='';
   if(!t.dailyLine) t.dailyLine={date:dayKey(),items:[]};
   if(!t.dailyLine.items) t.dailyLine.items=[];
+  if(!t.swLogs) t.swLogs=[];
+  if(typeof t.swAccumSec!=='number') t.swAccumSec=0;
+  if(!t.swActiveStart) t.swActiveStart=null;
   if(t.dailyLine.date!==dayKey()){
     t.dailyLine.date=dayKey();
     t.dailyLine.items=t.dailyLine.items.map(i=>({...i,done:false,doneAt:null}));
@@ -923,6 +1055,107 @@ function showTimelineDetail(label, startTs, endTs, durationSec){
   const safeLabel = decodeURIComponent(label || '');
   const endText = endTs ? fmtClock(Number(endTs)) : `(${tr('runningNow')})`;
   alert(`${tr('timelineDetailTitle')}\n${safeLabel}\n${tr('timelineStart')}: ${fmtClock(Number(startTs))}\n${tr('timelineEnd')}: ${endText}\n${tr('timelineDuration')}: ${hm(Number(durationSec)||0)}`);
+}
+function saveQuickAlarmHistory(){
+  try{ localStorage.setItem(QA_LOG_KEY, JSON.stringify(QA.history.slice(0,30))); }catch(e){}
+}
+function renderQuickAlarmHistory(){
+  const list = document.getElementById('qa-log-list');
+  if(!list) return;
+  const rows = QA.history.slice(0,5);
+  if(!rows.length){
+    list.innerHTML = `<div class="qa-log-row"><span>—</span><span class="time">--</span></div>`;
+    return;
+  }
+  list.innerHTML = rows.map(r=>{
+    const s = new Date(r.startAt);
+    const label = `${r.mins}m · ${r.status==='done'?tr('alarmStatusDone'):tr('alarmStatusStopped')}`;
+    return `<div class="qa-log-row"><span>${label}</span><span class="time">${s.toLocaleTimeString(LANG==='zh'?'zh-CN':'en-US',{hour:'2-digit',minute:'2-digit'})}</span></div>`;
+  }).join('');
+}
+function qaFmt(sec){
+  const m = Math.floor(sec/60), s = Math.floor(sec%60);
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function playAlarmBeep(){
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if(!Ctx) return;
+  const ctx = new Ctx();
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type='sine';
+  osc.frequency.value=920;
+  gain.gain.value=0.001;
+  osc.connect(gain); gain.connect(ctx.destination);
+  const n = ctx.currentTime;
+  gain.gain.exponentialRampToValueAtTime(0.18, n+0.02);
+  gain.gain.exponentialRampToValueAtTime(0.001, n+0.26);
+  osc.start(n); osc.stop(n+0.28);
+  setTimeout(()=>ctx.close(), 360);
+}
+function updateQuickAlarmUI(){
+  const timeEl=document.getElementById('qa-time');
+  const stopEl=document.getElementById('qa-stop-btn');
+  if(!timeEl || !stopEl) return;
+  if(QA.ringing){
+    timeEl.textContent='00:00';
+    stopEl.classList.add('ring');
+    renderQuickAlarmHistory();
+    return;
+  }
+  stopEl.classList.remove('ring');
+  if(!QA.endAt){
+    timeEl.textContent='--:--';
+    renderQuickAlarmHistory();
+    return;
+  }
+  const sec=Math.max(0,Math.round((QA.endAt-Date.now())/1000));
+  timeEl.textContent=qaFmt(sec);
+  renderQuickAlarmHistory();
+}
+function startRinging(){
+  if(QA.ringing) return;
+  if(QA.current){
+    QA.current.endAt = Date.now();
+    QA.current.status = 'done';
+    QA.history.unshift(QA.current);
+    QA.current = null;
+    saveQuickAlarmHistory();
+  }
+  QA.ringing=true;
+  QA.loop=setInterval(()=>{
+    playAlarmBeep();
+    navigator.vibrate && navigator.vibrate([240,120,240]);
+  },1050);
+  showRewardToast(tr('alarmDone'));
+  updateQuickAlarmUI();
+}
+function stopQuickAlarm(){
+  if(QA.current){
+    QA.current.endAt = Date.now();
+    QA.current.status = 'stopped';
+    QA.history.unshift(QA.current);
+    QA.current = null;
+    saveQuickAlarmHistory();
+  }
+  QA.endAt=null;
+  QA.ringing=false;
+  if(QA.loop){ clearInterval(QA.loop); QA.loop=null; }
+  navigator.vibrate && navigator.vibrate(0);
+  updateQuickAlarmUI();
+}
+function startQuickAlarm(mins){
+  const m=Number(mins)||0;
+  if(m<=0) return;
+  stopQuickAlarm();
+  QA.current = {startAt:Date.now(), mins:m, status:'running'};
+  QA.endAt=Date.now()+m*60*1000;
+  updateQuickAlarmUI();
+}
+function startQuickAlarmCustom(){
+  const v=parseInt(document.getElementById('qa-custom').value,10);
+  if(!v || v<=0) return;
+  startQuickAlarm(v);
 }
 const getDeductItems = t => {
   const preset = (t.deducts || []).map(id => {
@@ -1070,6 +1303,41 @@ function removeDeductTag(tid, ref){
 }
 
 function buildCard(t){
+  if(t.mode==='countup'){
+    const now=viewNowMs();
+    const runSec = t.swActiveStart ? (now - t.swActiveStart)/1000 : 0;
+    const totalSec = Math.max(0, t.swAccumSec + runSec);
+    const logs = (t.swLogs||[]).slice(0,6);
+    const div=document.createElement('div');
+    div.className='card'; div.dataset.id=t.id;
+    div.innerHTML=`
+      <div class="del-layer" id="del-${t.id}">
+        <span class="del-text">${tr('deleteTimer')}</span>
+        <button class="del-yes" onclick="doDelete('${t.id}')">${tr('delete')}</button>
+        <button class="del-no" onclick="cancelDel('${t.id}')">${tr('cancel')}</button>
+      </div>
+      <div class="card-head">
+        <div style="flex:1;min-width:0">
+          <div class="card-name">${t.name}</div>
+          <div class="card-meta"><span class="card-ends">${tr('stopwatch')}</span></div>
+        </div>
+        <div class="cbtn" onclick="askDel('${t.id}')">✕</div>
+      </div>
+      <div class="card-cd">
+        <div>
+          <div class="cd-lbl">${tr('elapsed')}</div>
+          <div class="cd-big" id="sw-main-${t.id}">${hms(totalSec)}</div>
+        </div>
+        <div class="cd-right">
+          <button class="stop-btn" onclick="${t.swActiveStart?`stopStopwatch('${t.id}')`:`startStopwatch('${t.id}')`}">${t.swActiveStart?tr('stop'):tr('start')}</button>
+        </div>
+      </div>
+      <div class="sess-section">
+        <div class="sess-top"><span class="sess-lbl">${tr('sessionHistory')}</span><span class="sess-tot">${hm(totalSec)}</span></div>
+        ${logs.length ? logs.map(l=>`<div class="sess-log-row"><span class="sess-log-name">${new Date(l.start).toLocaleTimeString(LANG==='zh'?'zh-CN':'en-US',{hour:'2-digit',minute:'2-digit'})} → ${new Date(l.end).toLocaleTimeString(LANG==='zh'?'zh-CN':'en-US',{hour:'2-digit',minute:'2-digit'})}</span><span class="sess-log-time">${hm(l.sec)}</span></div>`).join('') : `<div style="font-size:10px;color:var(--text3)">${tr('tapCategory')}</div>`}
+      </div>`;
+    return div;
+  }
   const now=viewNowMs();
   const totalSecs=Math.max(0,(t.targetTime-now)/1000);
   const dedSecs=dedTotalSecs(t);
@@ -1255,12 +1523,23 @@ function buildCard(t){
 
 // ─── TICK ────────────────────────────────────────────────
 function tick(){
+  if(QA.endAt && !QA.ringing && (QA.endAt-Date.now())<=0){
+    startRinging();
+  }
+  updateQuickAlarmUI();
   if(VIEW_DAY!==dayKey()){
     updateSummary();
     return;
   }
   const now=Date.now();
   S.timers.forEach(t=>{
+    if(t.mode==='countup'){
+      if(t.swActiveStart){
+        const el = document.getElementById(`sw-main-${t.id}`);
+        if(el) el.textContent = hms(t.swAccumSec + (now-t.swActiveStart)/1000);
+      }
+      return;
+    }
     const totalSecs=Math.max(0,(t.targetTime-now)/1000);
     const dedSecs=dedTotalSecs(t);
     const netSecs=Math.max(0,totalSecs-dedSecs);
@@ -1560,6 +1839,8 @@ function removeCustomDed(idx){
   renderCustomDedDraft();
 }
 function openSheet(){
+  ADD_MENU_OPEN=false;
+  document.getElementById('add-menu').classList.remove('show');
   fDur=8; fDeds=[]; fCustomDeds=[];
   document.getElementById('f-name').value='';
   document.getElementById('f-custom').value='';
@@ -1575,6 +1856,38 @@ function openSheet(){
   document.getElementById('add-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('f-name').focus(),320);
 }
+function openStopwatchSheet(){
+  ADD_MENU_OPEN=false;
+  document.getElementById('add-menu').classList.remove('show');
+  document.getElementById('sw-name').value='';
+  document.getElementById('sw-overlay').classList.add('open');
+  setTimeout(()=>document.getElementById('sw-name').focus(),320);
+}
+function createStopwatch(){
+  const name=(document.getElementById('sw-name').value||'').trim() || tr('stopwatch');
+  S.timers.unshift({
+    id:'sw_'+Date.now(), mode:'countup', name, createdAt:Date.now(), pageDate:VIEW_DAY,
+    swActiveStart:null, swAccumSec:0, swLogs:[]
+  });
+  save();
+  document.getElementById('sw-overlay').classList.remove('open');
+  render();
+}
+function startStopwatch(id){
+  const t=S.timers.find(x=>x.id===id); if(!t) return;
+  if(!t.swActiveStart) t.swActiveStart=Date.now();
+  save(); render();
+}
+function stopStopwatch(id){
+  const t=S.timers.find(x=>x.id===id); if(!t||!t.swActiveStart) return;
+  const now=Date.now();
+  const sec=Math.max(1,(now-t.swActiveStart)/1000);
+  t.swAccumSec += sec;
+  t.swLogs.unshift({start:t.swActiveStart,end:now,sec});
+  t.swLogs=t.swLogs.slice(0,40);
+  t.swActiveStart=null;
+  save(); render();
+}
 function createTimer(){
   const name=document.getElementById('f-name').value.trim()||tr('timerDefaultName');
   const cv=document.getElementById('f-custom').value;
@@ -1589,7 +1902,7 @@ function createTimer(){
   if(fDur==='eod'){ const e=new Date(); e.setHours(23,59,0,0); targetTime=e.getTime(); }
   else if(fDur==='custom'){ if(!cv){alert(tr('pickDateAlert'));return;} targetTime=new Date(cv).getTime(); }
   else targetTime=Date.now()+fDur*3600*1000;
-  S.timers.unshift({id:'t_'+Date.now(),name,targetTime,originalSecs:(targetTime-Date.now())/1000,
+  S.timers.unshift({id:'t_'+Date.now(),mode:'countdown',name,targetTime,originalSecs:(targetTime-Date.now())/1000,
     deducts:[...fDeds],deductOverrides:{},customDeducts:[...fCustomDeds],
     sessions:[],activeSession:null,workGoal,nudge,sprintMinutes:25,rewardCount:0,distractions:[],
     dailyLine:{date:dayKey(),items:dailyItems},
@@ -1600,12 +1913,17 @@ function bgClose(e,id){ if(e.target.id===id) document.getElementById(id).classLi
 document.addEventListener('click', (e)=>{
   if(e.target.closest('.lp-ded') || e.target.closest('.ded-del-btn')) return;
   clearDeductDeleteModes();
+  if(!e.target.closest('.add-btn') && !e.target.closest('.add-menu')){
+    ADD_MENU_OPEN=false;
+    const m=document.getElementById('add-menu');
+    if(m) m.classList.remove('show');
+  }
 });
 
 // ─── INIT ────────────────────────────────────────────────
 if(S.timers.length===0){
   S.timers.push({
-    id:'t_demo',name:tr('demoName'),
+    id:'t_demo',mode:'countdown',name:tr('demoName'),
     targetTime:Date.now()+48*3600*1000,originalSecs:48*3600,
     deducts:['s8','m'],
     deductOverrides:{},
